@@ -7,7 +7,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3. Text
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -42,16 +42,19 @@ fun AppNavHost(
                 onSmartShuffle = { nav.navigate("smartshuffle") },
             )
         }
-        composable(Dest.Library.route) { LibraryScreen(onOpenPlayer = { nav.navigate("player") }) }
-        composable(Dest.Profile.route) { ProfileScreen(currentSkin, onSkinChange) }
-        composable("player") { PlayerScreen(onBack = { nav.popBackStack() }) }
-        composable("smartshuffle") {
+        composable(Dest.Library.route) {
+            LibraryScreen(onOpenPlayer = { nav.navigate("player") })
+        }
+        composable(Dest.Profile.route) {
+            ProfileScreen(currentSkin, onSkinChange)
+        }
+        composable("player") {
+            PlayerScreen(onBack = { nav.popBackStack() })
+        }
         composable("smartshuffle") {
             SmartShuffleScreen(
                 onBack = { nav.popBackStack() },
                 onOpenPlayer = { nav.navigate("player") },
-            )
-            },
             )
         }
     }
