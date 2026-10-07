@@ -7,6 +7,10 @@ import com.fidelis.player.data.db.MusicDao
 import com.fidelis.player.data.db.MusicDatabase
 import com.fidelis.player.data.scan.MediaStoreScanner
 import com.fidelis.player.data.secure.SecureTokenStore
+import com.fidelis.player.integration.lastfm.LastfmApi
+import com.fidelis.player.integration.lastfm.LastfmApiImpl
+import com.fidelis.player.integration.lastfm.LastfmScrobbler
+import com.fidelis.player.integration.lastfm.SimilarityEngine
 import com.fidelis.player.integration.spotify.SpotifyMatcher
 import com.fidelis.player.playback.crossfade.CrossfadeEngine
 import dagger.Module
@@ -37,10 +41,22 @@ object AppModule {
     @Provides @Singleton
     fun matcher(dao: MusicDao) = SpotifyMatcher(dao)
 
-    // User's chosen default crossfade comes from settings; AUTO by default.
     @Provides @Singleton
     fun crossfadeEngine() = CrossfadeEngine(userPreferenceMs = CrossfadeEngine.AUTO)
 
     @Provides @Singleton
     fun spotifyClientId(): String = BuildConfig.SPOTIFY_CLIENT_ID
+
+    // ---- Last.fm ----
+    @Provides @Singleton
+    fun lastfmApi(impl: LastfmApiImpl): LastfmApi = impl
+
+    @Provides @Singleton
+    fun lastfmScrobbler(api: LastfmApi, dao: MusicDao, tokenStore: SecureTokenStore): LastfmScrobbler =
+        LastfmScrobbler(api, dao, BuildConfig.LASTFM_API_KEY, BuildConfig.LASTFM_SECRET) {
+            tokenStore.lastfmSessionKey
+        }
+
+    @Provides @Singleton
+    fun similarityEngine(api: LastfmApi, dao: MusicDao): SimilarityEngine = SimilarityEngine(api, dao)
 }
