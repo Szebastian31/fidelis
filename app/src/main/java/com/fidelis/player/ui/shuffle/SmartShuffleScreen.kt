@@ -14,7 +14,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun SmartShuffleScreen(
     onBack: () -> Unit,
-    onPlay: (List<Long>) -> Unit,
+    onOpenPlayer: () -> Unit,
     vm: SmartShuffleViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(Unit) { if (vm.rows.isEmpty()) vm.generate() }
@@ -29,7 +29,7 @@ fun SmartShuffleScreen(
         }
         Spacer(Modifier.height(8.dp))
         Button(
-            onClick = { onPlay(vm.orderedIds()) },
+            onClick = { vm.play(); onOpenPlayer() },
             enabled = vm.rows.isNotEmpty() && !vm.loading,
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (vm.rows.isEmpty()) "Building…" else "Play ${vm.rows.size} tracks") }
@@ -42,9 +42,7 @@ fun SmartShuffleScreen(
                 ListItem(
                     headlineContent = { Text(row.track.title) },
                     supportingContent = { Text(row.track.artist) },
-                    trailingContent = {
-                        AssistChip(onClick = {}, label = { Text("${row.why} · ${row.confidence}") })
-                    },
+                    trailingContent = { AssistChip(onClick = {}, label = { Text("${row.why} · ${row.confidence}") }) },
                 )
             }
         }
