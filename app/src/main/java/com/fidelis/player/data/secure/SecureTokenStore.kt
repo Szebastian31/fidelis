@@ -4,10 +4,6 @@ import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
-/**
- * Per-device encrypted storage for the user's own tokens. Nothing here is shipped in the
- * APK or committed to git — these values are produced at runtime when the user signs in.
- */
 class SecureTokenStore(context: Context) {
 
     private val prefs = EncryptedSharedPreferences.create(
@@ -26,7 +22,10 @@ class SecureTokenStore(context: Context) {
         get() = prefs.getString("sp_refresh", null)
         set(v) = prefs.edit().putString("sp_refresh", v).apply()
 
-    /** Last.fm per-user session key from auth.getMobileSession. */
+    var spotifyCodeVerifier: String?
+        get() = prefs.getString("sp_verifier", null)
+        set(v) = prefs.edit().putString("sp_verifier", v).apply()
+
     var lastfmSessionKey: String?
         get() = prefs.getString("lf_sk", null)
         set(v) = prefs.edit().putString("lf_sk", v).apply()
