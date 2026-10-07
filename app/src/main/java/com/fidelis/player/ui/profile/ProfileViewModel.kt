@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fidelis.player.integration.lastfm.LastfmRepository
 import com.fidelis.player.integration.spotify.SpotifyRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
@@ -14,27 +15,39 @@ import javax.inject.Inject
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val spotify: SpotifyRepository,
+    private val lastfm: LastfmRepository,
 ) : ViewModel() {
 
-    val connected: StateFlow<Boolean> = spotify.connected
+    // Spotify
+    val spotifyConnected: StateFlow<Boolean> = spotify.connected
+    var importing by mutableStateOf(false); private set
+    var importStatus by mutableStateOf<String?>(null); private set
 
-    var importing by mutableStateOf(false)
-        private set
-    var status by mutableStateOf<String?>(null)
-        private set
-
-    fun authUrl(): String = spotify.authUrl()
-
+    fun spotifyAuthUrl(): String = spotify.authUrl()
     fun importLibrary() {
         if (importing) return
         viewModelScope.launch {
-            importing = true
-            status = "Importing…"
-            val r = spotify.importLibrary { count -> status = "Fetched $count liked tracks…" }
-            status = "Imported ${r.total} • matched ${r.matched} • ${r.gaps} gaps"
+            importing = true; importStatus = "Importing…"
+            val r = spotify.importLibrary { c -> importStatus = "Fetched $c liked tracks…" }
+            importStatus = "Imported ${r.total} • matched ${r.matched} • ${r.gaps} gaps"
             importing = false
         }
     }
+    fun disconnectSpotify() { spotify.disconnect(); importStatus = null }
 
-    fun disconnect() { spotify.disconnect(); status = null }
+    // Last.fm
+    val lastfmConnected: StateFlow<Boolean> = lastfm.connected
+    var lastfmBusy by mutableStateOf(false); private set
+    var lastfmStatus by mutableStateOf<String?>(null); private set
+
+    fun connectLastfm(username: String, password: String) {
+        if (lastfmBusy || username.isBlank() || password.isBlank()) return
+        viewModelScope.launch {
+            lastfmBusy = true; lastfmStatus = "Signing in…"
+            val ok = lastfm.connect(username.trim(), password)
+            lastfmStatus = if (ok) null else "Sign-in failed — check your details."
+            lastfmBusy = false
+        }
+    }
+    fun disconnectLastfm() { lastfm.disconnect(); lastfmStatus = null }
 }
