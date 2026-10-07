@@ -1,0 +1,13 @@
+# Secrets — real values go in local.properties (git-ignored)
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.keystore
+!debug.keystore

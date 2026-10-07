@@ -1,0 +1,202 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.fidelis.player"
+4    android:versionCode="1"
+5    android:versionName="0.1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="35" />
+10
+11    <!-- Read the user's local audio library -->
+12    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+12-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:5:5-75
+12-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:5:22-72
+13    <!-- Legacy storage read for API 26..32 -->
+14    <uses-permission
+14-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:7:5-8:38
+15        android:name="android.permission.READ_EXTERNAL_STORAGE"
+15-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:7:22-77
+16        android:maxSdkVersion="32" />
+16-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:8:9-35
+17    <!-- Internet for Spotify import + Last.fm scrobbling -->
+18    <uses-permission android:name="android.permission.INTERNET" />
+18-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:10:5-67
+18-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:10:22-64
+19    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+19-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:11:5-79
+19-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:11:22-76
+20    <!-- Foreground media playback service + its notification -->
+21    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+21-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:13:5-77
+21-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:13:22-74
+22    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+22-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:14:5-92
+22-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:14:22-89
+23    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+23-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:15:5-77
+23-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:15:22-74
+24
+25    <permission
+25-->[androidx.core:core:1.13.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/7c63189be17137c8621b9bc1ffefcf99/transformed/core-1.13.1/AndroidManifest.xml:22:5-24:47
+26        android:name="com.fidelis.player.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+26-->[androidx.core:core:1.13.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/7c63189be17137c8621b9bc1ffefcf99/transformed/core-1.13.1/AndroidManifest.xml:23:9-81
+27        android:protectionLevel="signature" />
+27-->[androidx.core:core:1.13.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/7c63189be17137c8621b9bc1ffefcf99/transformed/core-1.13.1/AndroidManifest.xml:24:9-44
+28
+29    <uses-permission android:name="com.fidelis.player.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+29-->[androidx.core:core:1.13.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/7c63189be17137c8621b9bc1ffefcf99/transformed/core-1.13.1/AndroidManifest.xml:26:5-97
+29-->[androidx.core:core:1.13.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/7c63189be17137c8621b9bc1ffefcf99/transformed/core-1.13.1/AndroidManifest.xml:26:22-94
+30
+31    <application
+31-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:17:5-52:19
+32        android:name="com.fidelis.player.FidelisApp"
+32-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:18:9-35
+33        android:allowBackup="true"
+33-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:19:9-35
+34        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+34-->[androidx.core:core:1.13.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/7c63189be17137c8621b9bc1ffefcf99/transformed/core-1.13.1/AndroidManifest.xml:28:18-86
+35        android:debuggable="true"
+36        android:extractNativeLibs="false"
+37        android:label="Fidelis"
+37-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:20:9-32
+38        android:supportsRtl="true"
+38-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:21:9-35
+39        android:testOnly="true"
+40        android:theme="@style/Theme.Fidelis" >
+40-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:22:9-45
+41        <activity
+41-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:24:9-40:20
+42            android:name="com.fidelis.player.MainActivity"
+42-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:25:13-41
+43            android:exported="true"
+43-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:26:13-36
+44            android:theme="@style/Theme.Fidelis" >
+44-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:27:13-49
+45            <intent-filter>
+45-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:28:13-31:29
+46                <action android:name="android.intent.action.MAIN" />
+46-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:29:17-69
+46-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:29:25-66
+47
+48                <category android:name="android.intent.category.LAUNCHER" />
+48-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:30:17-77
+48-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:30:27-74
+49            </intent-filter>
+50
+51            <!-- Spotify OAuth (PKCE) redirect -->
+52            <intent-filter>
+52-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:34:13-39:29
+53                <action android:name="android.intent.action.VIEW" />
+53-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:35:17-69
+53-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:35:25-66
+54
+55                <category android:name="android.intent.category.DEFAULT" />
+55-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:36:17-76
+55-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:36:27-73
+56                <category android:name="android.intent.category.BROWSABLE" />
+56-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:37:17-78
+56-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:37:27-75
+57
+58                <data
+59                    android:host="auth"
+59-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:38:65-84
+60                    android:scheme="fidelis" />
+60-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:38:23-64
+61            </intent-filter>
+62        </activity>
+63
+64        <!-- Media3 playback service -->
+65        <service
+65-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:43:9-50:19
+66            android:name="com.fidelis.player.playback.PlaybackService"
+66-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:44:13-53
+67            android:exported="true"
+67-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:45:13-36
+68            android:foregroundServiceType="mediaPlayback" >
+68-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:46:13-58
+69            <intent-filter>
+69-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:47:13-49:29
+70                <action android:name="androidx.media3.session.MediaSessionService" />
+70-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:48:17-86
+70-->/Users/szymonszygula/AndroidStudioProjects/fidelis/app/src/main/AndroidManifest.xml:48:25-83
+71            </intent-filter>
+72        </service>
+73
+74        <provider
+74-->[androidx.emoji2:emoji2:1.3.0] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/564cb54a657f8df00f928da71ff94111/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+75            android:name="androidx.startup.InitializationProvider"
+75-->[androidx.emoji2:emoji2:1.3.0] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/564cb54a657f8df00f928da71ff94111/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
+76            android:authorities="com.fidelis.player.androidx-startup"
+76-->[androidx.emoji2:emoji2:1.3.0] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/564cb54a657f8df00f928da71ff94111/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
+77            android:exported="false" >
+77-->[androidx.emoji2:emoji2:1.3.0] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/564cb54a657f8df00f928da71ff94111/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
+78            <meta-data
+78-->[androidx.emoji2:emoji2:1.3.0] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/564cb54a657f8df00f928da71ff94111/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+79                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+79-->[androidx.emoji2:emoji2:1.3.0] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/564cb54a657f8df00f928da71ff94111/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
+80                android:value="androidx.startup" />
+80-->[androidx.emoji2:emoji2:1.3.0] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/564cb54a657f8df00f928da71ff94111/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
+81            <meta-data
+81-->[androidx.lifecycle:lifecycle-process:2.8.6] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d044fdb8e855a81f0ef3d47b330c839a/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:29:13-31:52
+82                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+82-->[androidx.lifecycle:lifecycle-process:2.8.6] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d044fdb8e855a81f0ef3d47b330c839a/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:30:17-78
+83                android:value="androidx.startup" />
+83-->[androidx.lifecycle:lifecycle-process:2.8.6] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d044fdb8e855a81f0ef3d47b330c839a/transformed/lifecycle-process-2.8.6/AndroidManifest.xml:31:17-49
+84            <meta-data
+84-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
+85                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+85-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
+86                android:value="androidx.startup" />
+86-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
+87        </provider>
+88
+89        <service
+89-->[androidx.room:room-runtime:2.6.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/2e7441179f71786e4c275f9c449a6c2f/transformed/room-runtime-2.6.1/AndroidManifest.xml:24:9-28:63
+90            android:name="androidx.room.MultiInstanceInvalidationService"
+90-->[androidx.room:room-runtime:2.6.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/2e7441179f71786e4c275f9c449a6c2f/transformed/room-runtime-2.6.1/AndroidManifest.xml:25:13-74
+91            android:directBootAware="true"
+91-->[androidx.room:room-runtime:2.6.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/2e7441179f71786e4c275f9c449a6c2f/transformed/room-runtime-2.6.1/AndroidManifest.xml:26:13-43
+92            android:exported="false" />
+92-->[androidx.room:room-runtime:2.6.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/2e7441179f71786e4c275f9c449a6c2f/transformed/room-runtime-2.6.1/AndroidManifest.xml:27:13-37
+93
+94        <receiver
+94-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
+95            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+95-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
+96            android:directBootAware="false"
+96-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
+97            android:enabled="true"
+97-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
+98            android:exported="true"
+98-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
+99            android:permission="android.permission.DUMP" >
+99-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
+100            <intent-filter>
+100-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
+101                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+101-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
+101-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
+102            </intent-filter>
+103            <intent-filter>
+103-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
+104                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+104-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
+104-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
+105            </intent-filter>
+106            <intent-filter>
+106-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
+107                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+107-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
+107-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
+108            </intent-filter>
+109            <intent-filter>
+109-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
+110                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+110-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
+110-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/szymonszygula/.gradle/caches/9.6.0/transforms/d4d3f236b848fff97e63175b4699afe1/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
+111            </intent-filter>
+112        </receiver>
+113    </application>
+114
+115</manifest>
