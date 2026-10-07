@@ -19,6 +19,7 @@ import com.fidelis.player.data.model.Track
 @Composable
 fun HomeScreen(
     onOpenPlayer: () -> Unit,
+    onSmartShuffle: () -> Unit,
     vm: HomeViewModel = hiltViewModel(),
 ) {
     val rows by vm.rows.collectAsState()
@@ -37,6 +38,11 @@ fun HomeScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        Spacer(Modifier.height(12.dp))
+
+        FilledTonalButton(onClick = onSmartShuffle, modifier = Modifier.fillMaxWidth()) {
+            Text("Smart Shuffle")
+        }
         Spacer(Modifier.height(12.dp))
 
         if (vm.query.isNotBlank()) {
