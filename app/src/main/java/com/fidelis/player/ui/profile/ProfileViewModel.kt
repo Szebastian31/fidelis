@@ -5,8 +5,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fidelis.player.data.settings.CrossfadePref
+import com.fidelis.player.data.settings.PlaybackSettings
+import com.fidelis.player.data.settings.QualityPref
 import com.fidelis.player.integration.lastfm.LastfmRepository
 import com.fidelis.player.integration.spotify.SpotifyRepository
+import com.fidelis.player.playback.crossfade.CrossfadeEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -16,6 +20,8 @@ import javax.inject.Inject
 class ProfileViewModel @Inject constructor(
     private val spotify: SpotifyRepository,
     private val lastfm: LastfmRepository,
+    private val settings: PlaybackSettings,
+    private val crossfadeEngine: CrossfadeEngine,
 ) : ViewModel() {
 
     // Spotify
@@ -50,4 +56,14 @@ class ProfileViewModel @Inject constructor(
         }
     }
     fun disconnectLastfm() { lastfm.disconnect(); lastfmStatus = null }
+
+    // Playback defaults
+    val quality: StateFlow<QualityPref> = settings.quality
+    val crossfade: StateFlow<CrossfadePref> = settings.crossfade
+
+    fun setQuality(q: QualityPref) = settings.setQuality(q)
+    fun setCrossfade(c: CrossfadePref) {
+        settings.setCrossfade(c)
+        crossfadeEngine.userPreferenceMs = c.ms  // takes effect on the next transition
+    }
 }
