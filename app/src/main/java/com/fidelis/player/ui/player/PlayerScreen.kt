@@ -1,23 +1,33 @@
 package com.fidelis.player.ui.player
 
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled. SkipNext
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.fidelis.player.data.model.Fidelity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun PlayerScreen(
@@ -34,6 +44,8 @@ fun PlayerScreen(
         return
     }
 
+    val art = rememberAlbumArt(ui.current?.uri)
+
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
         IconButton(onClick = onBack, modifier = Modifier.padding(top = 16.dp)) {
             Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Close")
@@ -44,7 +56,16 @@ fun PlayerScreen(
             Modifier.fillMaxWidth().aspectRatio(1f),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.primary,
-        ) {}
+        ) {
+            if (art != null) {
+                Image(
+                    bitmap = art,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+        }
 
         Spacer(Modifier.height(20.dp))
         Text(s.title, style = MaterialTheme.typography.headlineSmall, maxLines = 1)
@@ -81,7 +102,7 @@ fun PlayerScreen(
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment. CenterVertically,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = vm::previous) {
                 Icon(Icons.Filled.SkipPrevious, "Previous", modifier = Modifier.size(40.dp))
@@ -100,6 +121,27 @@ fun PlayerScreen(
             }
         }
     }
+}
+
+@Composable
+private fun rememberAlbumArt(uri: String?): ImageBitmap? {
+    val context = LocalContext.current
+    val art by produceState<ImageBitmap?>(initialValue = null, uri) {
+        value = if (uri == null) null else withContext(Dispatchers.IO) {
+            runCatching {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(context, Uri.parse(uri))
+                    retriever.embeddedPicture?.let {
+                        BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap()
+                    }
+                } finally {
+                    retriever.release()
+                }
+            }.getOrNull()
+        }
+    }
+    return art
 }
 
 @Composable
