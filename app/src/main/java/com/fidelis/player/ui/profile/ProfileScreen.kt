@@ -16,6 +16,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.fidelis.player.data.settings.CrossfadePref
+import com.fidelis.player.data.settings.QualityPref
 import com.fidelis.player.ui.theme.Skin
 
 @Composable
@@ -27,26 +29,35 @@ fun ProfileScreen(
     val context = LocalContext.current
     val spotifyConnected by vm.spotifyConnected.collectAsState()
     val lastfmConnected by vm.lastfmConnected.collectAsState()
+    val quality by vm.quality.collectAsState()
+    val crossfade by vm.crossfade.collectAsState()
     var user by rememberSaveable { mutableStateOf("") }
     var pass by rememberSaveable { mutableStateOf("") }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("Profile", style = MaterialTheme.typography.headlineMedium)
 
-        Text("Skins", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 16.dp))
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
-            Skin.entries.forEach { skin ->
-                FilterChip(
-                    selected = skin == current,
-                    onClick = { onSkinChange(skin) },
-                    label = { Text(skin.label) },
-                    modifier = Modifier.padding(end = 8.dp),
-                )
-            }
-        }
+        Label("Skins")
+        ChipRow(Skin.entries, current, { it.label }) { onSkinChange(it) }
 
-        Text("Spotify", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 16.dp))
+        Label("Playback defaults")
+        Text("Quality", style = MaterialTheme.typography.bodyMedium)
+        ChipRow(QualityPref.entries, quality, { it.label }) { vm.setQuality(it) }
+        Text(
+            "Which copy to play when you own a track in more than one format.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Spacer(Modifier.height(8.dp))
+        Text("Crossfade", style = MaterialTheme.typography.bodyMedium)
+        ChipRow(CrossfadePref.entries, crossfade, { it.label }) { vm.setCrossfade(it) }
+        Text(
+            "Auto blends by tempo and key; or pick a fixed length.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Label("Spotify")
         if (!spotifyConnected) {
             Button(onClick = {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.spotifyAuthUrl())))
@@ -63,8 +74,7 @@ fun ProfileScreen(
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
-        Text("Last.fm scrobbling", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 20.dp))
-        Spacer(Modifier.height(8.dp))
+        Label("Last.fm scrobbling")
         if (!lastfmConnected) {
             OutlinedTextField(
                 value = user, onValueChange = { user = it },
@@ -92,5 +102,24 @@ fun ProfileScreen(
         }
 
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun Label(text: String) {
+    Text(text, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+}
+
+@Composable
+private fun <T> ChipRow(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
+        options.forEach { opt ->
+            FilterChip(
+                selected = opt == selected,
+                onClick = { onSelect(opt) },
+                label = { Text(label(opt)) },
+                modifier = Modifier.padding(end = 8.dp),
+            )
+        }
     }
 }
