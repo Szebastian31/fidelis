@@ -7,6 +7,7 @@ import com.fidelis.player.data.db.MusicDao
 import com.fidelis.player.data.db.MusicDatabase
 import com.fidelis.player.data.scan.MediaStoreScanner
 import com.fidelis.player.data.secure.SecureTokenStore
+import com.fidelis.player.data.settings.PlaybackSettings
 import com.fidelis.player.integration.lastfm.LastfmApi
 import com.fidelis.player.integration.lastfm.LastfmApiImpl
 import com.fidelis.player.integration.lastfm.LastfmScrobbler
@@ -41,8 +42,10 @@ object AppModule {
     @Provides @Singleton
     fun matcher(dao: MusicDao) = SpotifyMatcher(dao)
 
+    // Seed the crossfade engine from the user's saved default; the Profile selector
+    // updates it live afterwards.
     @Provides @Singleton
-    fun crossfadeEngine() = CrossfadeEngine(userPreferenceMs = CrossfadeEngine.AUTO)
+    fun crossfadeEngine(settings: PlaybackSettings) = CrossfadeEngine(settings.crossfadeMs)
 
     @Provides @Singleton
     fun spotifyClientId(): String = BuildConfig.SPOTIFY_CLIENT_ID
