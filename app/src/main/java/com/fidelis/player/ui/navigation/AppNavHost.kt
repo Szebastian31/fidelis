@@ -46,13 +46,12 @@ fun AppNavHost(
         composable(Dest.Profile.route) { ProfileScreen(currentSkin, onSkinChange) }
         composable("player") { PlayerScreen(onBack = { nav.popBackStack() }) }
         composable("smartshuffle") {
+        composable("smartshuffle") {
             SmartShuffleScreen(
                 onBack = { nav.popBackStack() },
-                onPlay = { ids ->
-                    // TODO: hand `ids` to the same play(...) call your Library uses to start a track,
-                    // then open the player. For now this just navigates there.
-                    nav.navigate("player")
-                },
+                onOpenPlayer = { nav.navigate("player") },
+            )
+            },
             )
         }
     }
