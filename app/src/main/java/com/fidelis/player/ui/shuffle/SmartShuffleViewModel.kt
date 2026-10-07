@@ -5,21 +5,24 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.fidelis.player.data.db.MusicDao
-import com.fidelis.player.data.db.TrackEntity
+import com.fidelis.player.data.MusicRepository
+import com.fidelis.player.data.model.Track
 import com.fidelis.player.integration.lastfm.LastfmRepository
 import com.fidelis.player.integration.lastfm.SimilarityEngine
+import com.fidelis.player.playback.PlaybackConnection
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class SmartShuffleViewModel @Inject constructor(
     private val lastfm: LastfmRepository,
-    private val dao: MusicDao,
+    private val library: MusicRepository,
+    private val playback: PlaybackConnection,
 ) : ViewModel() {
 
-    data class Row(val track: TrackEntity, val confidence: Int, val why: String)
+    data class Row(val track: Track, val confidence: Int, val why: String)
 
     var loading by mutableStateOf(false); private set
     var rows by mutableStateOf<List<Row>>(emptyList()); private set
@@ -29,11 +32,11 @@ class SmartShuffleViewModel @Inject constructor(
         if (loading) return
         viewModelScope.launch {
             loading = true; note = null
-            val library = dao.allTracks()
-            if (library.isEmpty()) { note = "Scan your library first."; loading = false; return@launch }
+            val all = library.tracks().first()
+            if (all.isEmpty()) { note = "Scan your library first."; loading = false; return@launch }
 
-            val seed = library.random()
-            val byId = library.associateBy { it.id }
+            val seed = all.random()
+            val byId = all.associateBy { it.id }
             val suggestions = runCatching { lastfm.suggest(seed.id, 50) }.getOrDefault(emptyList())
 
             rows = if (suggestions.isNotEmpty()) {
@@ -43,13 +46,17 @@ class SmartShuffleViewModel @Inject constructor(
                 }
             } else {
                 note = "Consensus data is thin — using a flow mix. Connect Last.fm and play tracks to enrich it."
-                flowOrder(seed, library)
+                flowOrder(seed, all)
             }
             loading = false
         }
     }
 
-    fun orderedIds(): List<Long> = rows.map { it.track.id }
+    /** Start the generated queue on the real player. */
+    fun play() {
+        if (rows.isEmpty()) return
+        playback.play(rows.map { it.track }, 0)
+    }
 
     private fun label(why: SimilarityEngine.Why) = when (why) {
         SimilarityEngine.Why.CROWD -> "Crowd"
@@ -57,9 +64,8 @@ class SmartShuffleViewModel @Inject constructor(
         SimilarityEngine.Why.CONSENSUS -> "Consensus"
     }
 
-    /** Fallback: start at the seed, then always prefer a track by a different artist. */
-    private fun flowOrder(seed: TrackEntity, library: List<TrackEntity>): List<Row> {
-        val remaining = library.filter { it.id != seed.id }.toMutableList().apply { shuffle() }
+    private fun flowOrder(seed: Track, all: List<Track>): List<Row> {
+        val remaining = all.filter { it.id != seed.id }.toMutableList().apply { shuffle() }
         val out = ArrayList<Row>().apply { add(Row(seed, 100, "Seed")) }
         var lastArtist = seed.artist
         while (remaining.isNotEmpty()) {
