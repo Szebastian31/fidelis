@@ -18,7 +18,7 @@ import kotlin.math.abs
  * with TWO ExoPlayer instances (A = outgoing, B = incoming) and an equal-power volume ramp
  * driven on the main thread — see [CrossfadePlan] + the ramp loop in PlaybackController.
  */
-class CrossfadeEngine(private val userPreferenceMs: Int = AUTO) {
+class CrossfadeEngine(var userPreferenceMs: Int = AUTO) {
 
     companion object {
         const val AUTO = -1
