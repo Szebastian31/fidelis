@@ -11,3 +11,4 @@
 *.apk
 *.keystore
 !debug.keystore
+build/
