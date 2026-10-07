@@ -36,7 +36,12 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
 ) {
     NavHost(nav, startDestination = Dest.Home.route, modifier = modifier) {
-        composable(Dest. Home.route) { HomeScreen(onSmartShuffle = { nav.navigate("smartshuffle") }) }
+        composable(Dest.Home.route) {
+            HomeScreen(
+                onOpenPlayer = { nav.navigate("player") },
+                onSmartShuffle = { nav.navigate("smartshuffle") },
+            )
+        }
         composable(Dest.Library.route) { LibraryScreen(onOpenPlayer = { nav.navigate("player") }) }
         composable(Dest.Profile.route) { ProfileScreen(currentSkin, onSkinChange) }
         composable("player") { PlayerScreen(onBack = { nav.popBackStack() }) }
