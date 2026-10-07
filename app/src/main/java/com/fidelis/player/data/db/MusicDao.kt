@@ -26,6 +26,9 @@ interface MusicDao {
     @Query("SELECT * FROM tracks WHERE id = :id")
     suspend fun track(id: Long): TrackEntity?
 
+    @Query("SELECT * FROM tracks ORDER BY artist, album, title")
+    suspend fun allTracks(): List<TrackEntity>
+
     @Query("UPDATE tracks SET losslessAvailable = :available WHERE id = :id")
     suspend fun setLosslessAvailable(id: Long, available: Boolean)
 
