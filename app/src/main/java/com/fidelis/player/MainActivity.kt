@@ -1,5 +1,6 @@
 package com.fidelis.player
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,19 +11,26 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
+import com.fidelis.player.integration.spotify.SpotifyRepository
 import com.fidelis.player.ui.navigation.AppNavHost
 import com.fidelis.player.ui.navigation.BottomBar
 import com.fidelis.player.ui.theme.FidelisTheme
 import com.fidelis.player.ui.theme.Skin
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject lateinit var spotify: SpotifyRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleIntent(intent)
         setContent {
-            // Skin selection lives in Profile; hoisted here so the whole app re-themes live.
             var skin by remember { mutableStateOf(Skin.Daylight) }
             FidelisTheme(skin = skin) {
                 val nav = rememberNavController()
@@ -35,6 +43,21 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    /** Catch the fidelis://auth?code=... redirect from the Spotify login. */
+    private fun handleIntent(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (data.scheme == "fidelis" && data.host == "auth") {
+            val code = data.getQueryParameter("code") ?: return
+            lifecycleScope.launch { spotify.completeAuth(code) }
         }
     }
 }
