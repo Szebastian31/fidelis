@@ -60,11 +60,34 @@ class MoodRepository @Inject constructor(
 
     private suspend fun scoreTracks(tracks: List<PlaylistTrack>, mood: Mood, limit: Int): List<MoodTrack> =
         withContext(Dispatchers.IO) {
-            tracks.map { t ->
+            val scored = tracks.map { t ->
                 val matched = tagsFor(t.artist).filter { it in mood.tags }
                 MoodTrack(t.uri, t.title, t.artist, matched.size, matched)
             }.filter { it.score > 0 }.sortedByDescending { it.score }.take(limit)
+            flowOrder(scored)
         }
+
+    /** Greedy nearest-neighbour chaining by shared Last.fm tags, so the mix flows. */
+    private suspend fun flowOrder(tracks: List<MoodTrack>): List<MoodTrack> {
+        if (tracks.size <= 2) return tracks
+        val tagMap = HashMap<String, Set<String>>()
+        for (t in tracks) if (!tagMap.containsKey(t.artist)) tagMap[t.artist] = tagsFor(t.artist).toSet()
+
+        val remaining = tracks.toMutableList()
+        val ordered = ArrayList<MoodTrack>()
+        var current = remaining.removeAt(0) // highest-scoring track leads
+        ordered.add(current)
+        while (remaining.isNotEmpty()) {
+            val curTags = tagMap[current.artist] ?: emptySet()
+            val next = remaining.maxByOrNull { cand ->
+                (tagMap[cand.artist] ?: emptySet()).count { it in curTags }
+            } ?: remaining.first()
+            remaining.remove(next)
+            ordered.add(next)
+            current = next
+        }
+        return ordered
+    }
 
     private suspend fun tagsFor(artist: String): List<String> {
         if (artist.isBlank()) return emptyList()
