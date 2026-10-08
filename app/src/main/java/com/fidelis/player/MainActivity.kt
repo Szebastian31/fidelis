@@ -1,6 +1,7 @@
 package com.fidelis.player
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -39,6 +40,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         handleIntent(intent)
+
+        // Android 13+: the media notification won't show without this grant.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(android. Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 2001)
+        }
+
         setContent {
             var skin by remember { mutableStateOf(Skin.Midnight) }
             FidelisTheme(skin = skin) {
@@ -60,7 +70,7 @@ class MainActivity : ComponentActivity() {
         spotifyRemote.markConnecting()
         val request = AuthorizationRequest.Builder(
             BuildConfig.SPOTIFY_CLIENT_ID,
-            AuthorizationResponse.Type.TOKEN,
+            AuthorizationResponse.Type. TOKEN,
             "fidelis://auth",
         ).setScopes(arrayOf("app-remote-control", "streaming", "user-modify-playback-state")).build()
         AuthorizationClient.openLoginActivity(this, SPOTIFY_AUTH_REQUEST, request)
@@ -72,7 +82,7 @@ class MainActivity : ComponentActivity() {
         if (requestCode == SPOTIFY_AUTH_REQUEST) {
             val response = AuthorizationClient.getResponse(resultCode, data)
             when (response.type) {
-                AuthorizationResponse. Type.TOKEN -> spotifyRemote.connect(this)
+                AuthorizationResponse.Type.TOKEN -> spotifyRemote.connect(this)
                 AuthorizationResponse.Type.ERROR -> spotifyRemote.reportAuthError(response.error)
                 else -> spotifyRemote.reportAuthError("Authorization cancelled")
             }
