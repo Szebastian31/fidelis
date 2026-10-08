@@ -138,6 +138,32 @@ class SpotifyRepository @Inject constructor(
         out
     }
 
+    /** The user's top tracks (needs the user-top-read scope) for personalized suggestions. */
+    suspend fun fetchTopTracks(timeRange: String = "medium_term", limit: Int = 50): List<PlaylistTrack> =
+        withContext(Dispatchers.IO) {
+            val token = tokenStore.spotifyAccessToken ?: return@withContext emptyList()
+            val url = "https://api.spotify.com/v1/me/top/tracks?limit=$limit&time_range=$timeRange"
+            val req = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
+            runCatching {
+                client.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use emptyList()
+                    val items = JSONObject(resp.body?.string().orEmpty()).optJSONArray("items")
+                        ?: return@use emptyList()
+                    buildList {
+                        for (i in 0 until items.length()) {
+                            val t = items.getJSONObject(i)
+                            val uri = t.optString("uri")
+                            if (!uri.startsWith("spotify:track:")) continue
+                            val artists = t.optJSONArray("artists")
+                            val artist = if (artists != null && artists.length() > 0)
+                                artists.getJSONObject(0).optString("name") else ""
+                            add(PlaylistTrack(uri, t.optString("name"), artist))
+                        }
+                    }
+                }
+            }.getOrDefault(emptyList())
+        }
+    
     suspend fun importLibrary(onProgress: (Int) -> Unit = {}): ImportResult = withContext(Dispatchers.IO) {
         val token = tokenStore.spotifyAccessToken ?: return@withContext ImportResult(0, 0, 0)
         val tracks = ArrayList<SpotifyTrack>()
