@@ -12,7 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui. Modifier
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
@@ -23,6 +23,9 @@ import com.fidelis.player.ui.navigation.BottomBar
 import com.fidelis.player.ui.theme.Fidelis
 import com.fidelis.player.ui.theme.FidelisTheme
 import com.fidelis.player.ui.theme.Skin
+import com.spotify.sdk.android.auth.AuthorizationClient
+import com.spotify.sdk.android.auth.AuthorizationRequest
+import com.spotify.sdk.android.auth.AuthorizationResponse
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -45,13 +48,33 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize().background(Fidelis.skyGradient),
                     bottomBar = { BottomBar(nav) },
                 ) { padding ->
-                    AppNavHost(
-                        nav = nav,
-                        currentSkin = skin,
-                        onSkinChange = { skin = it },
-                        modifier = Modifier.padding(padding),
-                    )
+                    AppNavHost(nav = nav, currentSkin = skin, onSkinChange = { skin = it },
+                        modifier = Modifier.padding(padding))
                 }
+            }
+        }
+    }
+
+    /** Explicit Spotify authorization (shows the approval screen), then connect App Remote. */
+    fun authorizeSpotify() {
+        spotifyRemote.markConnecting()
+        val request = AuthorizationRequest.Builder(
+            BuildConfig.SPOTIFY_CLIENT_ID,
+            AuthorizationResponse.Type.TOKEN,
+            "fidelis://auth",
+        ).setScopes(arrayOf("app-remote-control", "streaming", "user-modify-playback-state")).build()
+        AuthorizationClient.openLoginActivity(this, SPOTIFY_AUTH_REQUEST, request)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == SPOTIFY_AUTH_REQUEST) {
+            val response = AuthorizationClient.getResponse(resultCode, data)
+            when (response.type) {
+                AuthorizationResponse. Type.TOKEN -> spotifyRemote.connect(this)
+                AuthorizationResponse.Type.ERROR -> spotifyRemote.reportAuthError(response.error)
+                else -> spotifyRemote.reportAuthError("Authorization cancelled")
             }
         }
     }
@@ -70,4 +93,6 @@ class MainActivity : ComponentActivity() {
             lifecycleScope.launch { spotify.completeAuth(code) }
         }
     }
+
+    companion object { private const val SPOTIFY_AUTH_REQUEST = 1337 }
 }
