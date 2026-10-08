@@ -31,6 +31,9 @@ android {
         buildConfigField("String", "LASTFM_SECRET", secret("LASTFM_SECRET"))
         // Custom scheme used for the Spotify OAuth redirect (register it in your Spotify dashboard).
         manifestPlaceholders["spotifyRedirectScheme"] = "fidelis"
+
+        manifestPlaceholders["redirectSchemeName"] = "fidelis"
+        manifestPlaceholders["redirectHostName"] = "auth"
     }
     signingConfigs {
         getByName("debug") {
