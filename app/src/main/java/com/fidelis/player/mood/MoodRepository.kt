@@ -43,7 +43,8 @@ class MoodRepository @Inject constructor(
     private val lastfm: LastfmRepository,
     private val remote: SpotifyRemote,
 ) {
-    private val tagCache = ConcurrentHashMap<String, List<String>>()
+    private val artistTagCache = ConcurrentHashMap<String, List<String>>()
+    private val trackTagCache = ConcurrentHashMap<String, List<String>>()
 
     suspend fun build(playlistId: String, mood: Mood, limit: Int = 40): List<MoodTrack> =
         scoreTracks(spotify.fetchPlaylistTracks(playlistId).take(80), mood, limit)
@@ -59,41 +60,55 @@ class MoodRepository @Inject constructor(
         remote.playQueue(tracks.map { QueueTrack(it.uri, it.title, it.artist) })
 
     private suspend fun scoreTracks(tracks: List<PlaylistTrack>, mood: Mood, limit: Int): List<MoodTrack> =
-        withContext(Dispatchers.IO) {
-            val scored = tracks.map { t ->
-                val matched = tagsFor(t.artist).filter { it in mood.tags }
+        withContext(Dispatchers. IO) {
+            // 1) cheap artist-tag prefilter → a bounded candidate set
+            val candidates = tracks
+                .map { it to artistTags(it.artist).count { tg -> tg in mood.tags } }
+                .filter { it.second > 0 }
+                .sortedByDescending { it.second }
+                .map { it.first }
+                .take(maxOf(limit, 30))
+
+            // 2) refine candidates with precise per-track tags (fallback to artist tags)
+            val tagByUri = HashMap<String, Set<String>>()
+            val scored = candidates.map { t ->
+                val tags = trackTags(t.artist, t.title)
+                tagByUri[t.uri] = tags.toSet()
+                val matched = tags.filter { it in mood.tags }
                 MoodTrack(t.uri, t.title, t.artist, matched.size, matched)
             }.filter { it.score > 0 }.sortedByDescending { it.score }.take(limit)
-            flowOrder(scored)
+
+            flowOrder(scored, tagByUri)
         }
 
-    /** Greedy nearest-neighbour chaining by shared Last.fm tags, so the mix flows. */
-    private suspend fun flowOrder(tracks: List<MoodTrack>): List<MoodTrack> {
+    /** Greedy nearest-neighbour chaining by shared track tags, so the mix flows. */
+    private fun flowOrder(tracks: List<MoodTrack>, tagByUri: Map<String, Set<String>>): List<MoodTrack> {
         if (tracks.size <= 2) return tracks
-        val tagMap = HashMap<String, Set<String>>()
-        for (t in tracks) if (!tagMap.containsKey(t.artist)) tagMap[t.artist] = tagsFor(t.artist).toSet()
-
         val remaining = tracks.toMutableList()
         val ordered = ArrayList<MoodTrack>()
-        var current = remaining.removeAt(0) // highest-scoring track leads
+        var current = remaining.removeAt(0) // highest-scoring leads
         ordered.add(current)
         while (remaining.isNotEmpty()) {
-            val curTags = tagMap[current.artist] ?: emptySet()
-            val next = remaining.maxByOrNull { cand ->
-                (tagMap[cand.artist] ?: emptySet()).count { it in curTags }
-            } ?: remaining.first()
-            remaining.remove(next)
-            ordered.add(next)
-            current = next
+            val cur = tagByUri[current.uri] ?: emptySet()
+            val next = remaining.maxByOrNull { c -> (tagByUri[c.uri] ?: emptySet()).count { it in cur } }
+                ?: remaining.first()
+            remaining.remove(next); ordered.add(next); current = next
         }
         return ordered
     }
 
-    private suspend fun tagsFor(artist: String): List<String> {
+    private suspend fun artistTags(artist: String): List<String> {
         if (artist.isBlank()) return emptyList()
-        tagCache[artist]?.let { return it }
-        val tags = lastfm.artistTags(artist)
-        tagCache[artist] = tags
-        return tags
+        artistTagCache[artist]?.let { return it }
+        return lastfm.artistTags(artist).also { artistTagCache[artist] = it }
+    }
+
+    private suspend fun trackTags(artist: String, title: String): List<String> {
+        val key = "$artist|$title"
+        trackTagCache[key]?.let { return it }
+        val t = lastfm.trackTags(artist, title)
+        val result = if (t.isNotEmpty()) t else artistTags(artist) // fallback
+        trackTagCache[key] = result
+        return result
     }
 }
