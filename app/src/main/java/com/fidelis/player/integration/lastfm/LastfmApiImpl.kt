@@ -70,15 +70,19 @@ class LastfmApiImpl @Inject constructor() : LastfmApi {
             }.getOrDefault(emptyList())
         }
 
-    /** Top tags for an artist (lowercased) — the mood signal. */
     suspend fun getArtistTags(artist: String, limit: Int = 12): List<String> =
+        topTags("artist.getTopTags", mapOf("artist" to artist), limit)
+
+    suspend fun getTrackTags(artist: String, track: String, limit: Int = 12): List<String> =
+        topTags("track.getTopTags", mapOf("artist" to artist, "track" to track), limit)
+
+    private suspend fun topTags(method: String, args: Map<String, String>, limit: Int): List<String> =
         withContext(Dispatchers.IO) {
-            if (artist.isBlank()) return@withContext emptyList()
-            val url = endpoint.toHttpUrl().newBuilder()
-                .addQueryParameter("method", "artist.getTopTags")
-                .addQueryParameter("artist", artist).addQueryParameter("autocorrect", "1")
-                .addQueryParameter("api_key", apiKey).addQueryParameter("format", "json").build()
-            val req = Request.Builder().url(url).get().build()
+            if (args.values.any { it.isBlank() }) return@withContext emptyList()
+            val b = endpoint.toHttpUrl().newBuilder().addQueryParameter("method", method)
+            args.forEach { (k, v) -> b.addQueryParameter(k, v) }
+            b.addQueryParameter("autocorrect", "1").addQueryParameter("api_key", apiKey).addQueryParameter("format", "json")
+            val req = Request.Builder().url(b.build()).get().build()
             runCatching {
                 client.newCall(req).execute().use { resp ->
                     val arr = JSONObject(resp.body?.string().orEmpty())
