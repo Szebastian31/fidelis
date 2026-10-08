@@ -5,7 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics. Color
 
 /**
  * User-selectable skins. Each maps to a Material 3 [ColorScheme] so the whole app
@@ -44,5 +44,5 @@ enum class Skin(val label: String, val isDark: Boolean) {
 
 @Composable
 fun FidelisTheme(skin: Skin, content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = skin.scheme(), content = content)
+    MaterialTheme(colorScheme = skin.scheme(), typography = FidelisType, content = content)
 }
