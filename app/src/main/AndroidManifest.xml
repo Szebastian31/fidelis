@@ -16,7 +16,7 @@
 
     <application
         android:name=".FidelisApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher"
         android:label="Fidelis"
