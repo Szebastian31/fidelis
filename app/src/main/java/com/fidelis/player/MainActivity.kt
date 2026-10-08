@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
+import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.SpotifyRepository
 import com.fidelis.player.ui.navigation.AppNavHost
 import com.fidelis.player.ui.navigation.BottomBar
@@ -26,6 +27,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var spotify: SpotifyRepository
+    @Inject lateinit var spotifyRemote: SpotifyRemote
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,13 +48,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        spotifyRemote.connect(this)
+    }
+
+    override fun onStop() {
+        spotifyRemote.disconnect()
+        super.onStop()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIntent(intent)
     }
 
-    /** Catch the fidelis://auth?code=... redirect from the Spotify login. */
     private fun handleIntent(intent: Intent?) {
         val data = intent?.data ?: return
         if (data.scheme == "fidelis" && data.host == "auth") {
