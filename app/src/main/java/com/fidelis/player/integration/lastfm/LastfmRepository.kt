@@ -24,21 +24,15 @@ class LastfmRepository @Inject constructor(
         return true
     }
 
-    fun disconnect() {
-        tokenStore.lastfmSessionKey = null
-        _connected.value = false
-    }
+    fun disconnect() { tokenStore.lastfmSessionKey = null; _connected.value = false }
 
-    fun shouldScrobble(positionMs: Long, durationMs: Long) =
-        scrobbler.shouldScrobble(positionMs, durationMs)
-
+    fun shouldScrobble(positionMs: Long, durationMs: Long) = scrobbler.shouldScrobble(positionMs, durationMs)
     suspend fun updateNowPlaying(artist: String, track: String, album: String?) =
         scrobbler.updateNowPlaying(artist, track, album)
-
     suspend fun enqueue(artist: String, track: String, album: String?, startedAtSec: Long) =
         scrobbler.enqueue(artist, track, album, startedAtSec)
-
     suspend fun flush() = scrobbler.flush()
 
     suspend fun suggest(seedTrackId: Long, limit: Int = 25) = similarity.suggest(seedTrackId, limit)
+    suspend fun artistTags(artist: String): List<String> = api.getArtistTags(artist)
 }
