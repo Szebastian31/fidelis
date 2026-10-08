@@ -2,17 +2,23 @@ package com.fidelis.player.ui.theme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
-import androidx.compose.runtime. Composable
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-/** The Consensus-Weather-derived premium palette. */
 object Fidelis {
     val bg0 = Color(0xFF0A0F26); val bg1 = Color(0xFF161D47); val bg2 = Color(0xFF282C5E)
     val violet = Color(0xFFB49CFF); val pink = Color(0xFFE4657F); val purple = Color(0xFF8B5CC7)
@@ -30,8 +36,32 @@ fun FidelisBackground(content: @Composable () -> Unit) {
 
 @Composable
 fun GlassCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Surface(modifier = modifier, color = Fidelis.glass, contentColor = Fidelis.ink,
-        shape = RoundedCornerShape(28.dp)) {
+    Surface(
+        modifier = modifier,
+        color = Fidelis.glass,
+        contentColor = Fidelis.ink,
+        shape = RoundedCornerShape(28.dp),
+        shadowElevation = 12.dp,
+    ) {
         Box(Modifier.border(1.dp, Fidelis.line, RoundedCornerShape(28.dp))) { content() }
     }
+}
+
+/** Pill button with the violet→pink accent gradient. Put a Text(color = Fidelis.ink) inside. */
+@Composable
+fun GradientButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .alpha(if (enabled) 1f else 0.4f)
+            .clip(RoundedCornerShape(999.dp))
+            .background(Fidelis.accent)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) { Row(verticalAlignment = Alignment.CenterVertically, content = content) }
 }
