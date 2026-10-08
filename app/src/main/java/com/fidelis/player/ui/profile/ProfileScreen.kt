@@ -35,6 +35,7 @@ fun ProfileScreen(
     val quality by vm.quality.collectAsState()
     val crossfade by vm.crossfade.collectAsState()
     val remoteConnected by vm.remoteConnected.collectAsState()
+    val remoteError by vm.remoteError.collectAsState()
     val now by vm.nowPlaying.collectAsState()
     var user by rememberSaveable { mutableStateOf("") }
     var pass by rememberSaveable { mutableStateOf("") }
@@ -44,9 +45,22 @@ fun ProfileScreen(
             Text("Profile", color = Fidelis.ink, style = MaterialTheme.typography.headlineMedium)
 
             Section("Spotify playback") {
-                Text(if (remoteConnected) "Connected to the Spotify app" else "Connecting… open once to approve",
-                    color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium)
-                now?.let { Text("${it.title} — ${it.artist}", color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall) }
+                Text(
+                    if (remoteConnected) "Connected to the Spotify app"
+                    else "Not connected — tap Connect, then approve in Spotify.",
+                    color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium,
+                )
+                now?.let {
+                    Text("${it.title} — ${it.artist}", color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall)
+                }
+                if (!remoteConnected) {
+                    Spacer(Modifier.height(10.dp))
+                    Button(onClick = { vm.connectBridge(context) }) { Text("Connect playback") }
+                }
+                remoteError?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text("Bridge error: $it", color = Fidelis.pink, style = MaterialTheme.typography.labelSmall)
+                }
             }
 
             Section("Playback defaults") {
@@ -55,20 +69,6 @@ fun ProfileScreen(
                 Spacer(Modifier.height(8.dp))
                 Text("Crossfade", color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium)
                 ChipRow(CrossfadePref.entries, crossfade, { it.label }) { vm.setCrossfade(it) }
-            }
-
-            Section("Spotify import") {
-                if (!spotifyConnected) {
-                    Button(onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.spotifyAuthUrl())))
-                    }) { Text("Connect Spotify") }
-                } else {
-                    Button(onClick = { vm.importLibrary() }, enabled = !vm.importing) {
-                        Text(if (vm.importing) "Importing…" else "Import my library")
-                    }
-                    TextButton(onClick = { vm.disconnectSpotify() }) { Text("Disconnect") }
-                }
-                vm.importStatus?.let { Text(it, color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall) }
             }
 
             Section("Last.fm scrobbling") {
@@ -105,9 +105,7 @@ fun ProfileScreen(
 private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
     Text(title, color = Fidelis.inkMute, style = MaterialTheme.typography.labelLarge,
         modifier = Modifier.padding(top = 20.dp, bottom = 6.dp))
-    GlassCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), content = content)
-    }
+    GlassCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), content = content) }
 }
 
 @Composable
