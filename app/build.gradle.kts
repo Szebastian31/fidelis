@@ -32,7 +32,14 @@ android {
         // Custom scheme used for the Spotify OAuth redirect (register it in your Spotify dashboard).
         manifestPlaceholders["spotifyRedirectScheme"] = "fidelis"
     }
-
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("../fidelis-debug.keystore")
+            storePassword = "fidelis123"
+            keyAlias = "fidelis"
+            keyPassword = "fidelis123"
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = true
