@@ -27,13 +27,12 @@ class ProfileViewModel @Inject constructor(
     private val remote: SpotifyRemote,
 ) : ViewModel() {
 
-    // Spotify bridge (playback)
     val remoteConnected: StateFlow<Boolean> = remote.connected
-    val nowPlaying: StateFlow<SpotifyRemote.Snapshot?> = remote.state
+    val remoteConnecting: StateFlow<Boolean> = remote.connecting
     val remoteError: StateFlow<String?> = remote.error
+    val nowPlaying: StateFlow<SpotifyRemote.Snapshot?> = remote.state
     fun connectBridge(context: Context) = remote.connect(context)
 
-    // Spotify Web API (import)
     val spotifyConnected: StateFlow<Boolean> = spotify.connected
     var importing by mutableStateOf(false); private set
     var importStatus by mutableStateOf<String?>(null); private set
@@ -43,13 +42,11 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             importing = true; importStatus = "Importing…"
             val r = spotify.importLibrary { c -> importStatus = "Fetched $c liked tracks…" }
-            importStatus = "Imported ${r.total}"
-            importing = false
+            importStatus = "Imported ${r.total}"; importing = false
         }
     }
     fun disconnectSpotify() { spotify.disconnect(); importStatus = null }
 
-    // Last.fm
     val lastfmConnected: StateFlow<Boolean> = lastfm.connected
     var lastfmBusy by mutableStateOf(false); private set
     var lastfmStatus by mutableStateOf<String?>(null); private set
@@ -58,17 +55,13 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             lastfmBusy = true; lastfmStatus = "Signing in…"
             val ok = lastfm.connect(username.trim(), password)
-            lastfmStatus = if (ok) null else "Sign-in failed — check your details."
-            lastfmBusy = false
+            lastfmStatus = if (ok) null else "Sign-in failed — check your details."; lastfmBusy = false
         }
     }
     fun disconnectLastfm() { lastfm.disconnect(); lastfmStatus = null }
 
-    // Playback defaults
     val quality: StateFlow<QualityPref> = settings.quality
     val crossfade: StateFlow<CrossfadePref> = settings.crossfade
     fun setQuality(q: QualityPref) = settings.setQuality(q)
-    fun setCrossfade(c: CrossfadePref) {
-        settings.setCrossfade(c); crossfadeEngine.userPreferenceMs = c.ms
-    }
+    fun setCrossfade(c: CrossfadePref) { settings.setCrossfade(c); crossfadeEngine.userPreferenceMs = c.ms }
 }
