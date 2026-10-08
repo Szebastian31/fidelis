@@ -34,6 +34,7 @@ fun ProfileScreen(
     val lastfmConnected by vm.lastfmConnected.collectAsState()
     val quality by vm.quality.collectAsState()
     val crossfade by vm.crossfade.collectAsState()
+    val remoteConnecting by vm.remoteConnecting.collectAsState()
     val remoteConnected by vm.remoteConnected.collectAsState()
     val remoteError by vm.remoteError.collectAsState()
     val now by vm.nowPlaying.collectAsState()
@@ -46,8 +47,11 @@ fun ProfileScreen(
 
             Section("Spotify playback") {
                 Text(
-                    if (remoteConnected) "Connected to the Spotify app"
-                    else "Not connected — tap Connect, then approve in Spotify.",
+                    when {
+                        remoteConnected -> "Connected to the Spotify app"
+                        remoteConnecting -> "Connecting…"
+                        else -> "Not connected — tap Connect, then approve in Spotify."
+                    },
                     color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium,
                 )
                 now?.let {
@@ -55,7 +59,9 @@ fun ProfileScreen(
                 }
                 if (!remoteConnected) {
                     Spacer(Modifier.height(10.dp))
-                    Button(onClick = { vm.connectBridge(context) }) { Text("Connect playback") }
+                    Button(onClick = { vm.connectBridge(context) }) {
+                        Text(if (remoteConnecting) "Retry connect" else "Connect playback")
+                    }
                 }
                 remoteError?.let {
                     Spacer(Modifier.height(6.dp))
