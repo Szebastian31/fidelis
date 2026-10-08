@@ -77,6 +77,9 @@ dependencies {
 
     implementation(files("libs/spotify-app-remote-release-0.8.0.aar"))
     implementation("com.google.code.gson:gson:2.11.0")
+    implementation("com.spotify.android:auth:2.1.0")
+    implementation("androidx.browser:browser:1.8.0")
+    implementation("androidx.appcompat:appcompat:1.7.0")
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
