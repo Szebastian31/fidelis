@@ -4,7 +4,7 @@ import com.fidelis.player.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl. Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -12,11 +12,6 @@ import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Concrete Last.fm transport against https://ws.audioscrobbler.com/2.0/ :
- * signed form-POST for writes + mobile auth, plain GET for track.getSimilar.
- * The public api key + shared secret come from BuildConfig (set them as repo secrets).
- */
 @Singleton
 class LastfmApiImpl @Inject constructor() : LastfmApi {
 
@@ -25,14 +20,11 @@ class LastfmApiImpl @Inject constructor() : LastfmApi {
     private val secret = BuildConfig.LASTFM_SECRET
     private val endpoint = "https://ws.audioscrobbler.com/2.0/"
 
-    /** auth.getMobileSession — trade username+password for a per-user session key. */
     suspend fun getMobileSession(username: String, password: String): String? =
         withContext(Dispatchers.IO) {
             val params = sortedMapOf(
                 "method" to "auth.getMobileSession",
-                "username" to username,
-                "password" to password,
-                "api_key" to apiKey,
+                "username" to username, "password" to password, "api_key" to apiKey,
             )
             val req = Request.Builder().url(endpoint).post(formBody(signed(params))).build()
             runCatching {
@@ -58,19 +50,14 @@ class LastfmApiImpl @Inject constructor() : LastfmApi {
         withContext(Dispatchers.IO) {
             val url = endpoint.toHttpUrl().newBuilder()
                 .addQueryParameter("method", "track.getSimilar")
-                .addQueryParameter("artist", artist)
-                .addQueryParameter("track", track)
-                .addQueryParameter("autocorrect", "1")
-                .addQueryParameter("limit", limit.toString())
-                .addQueryParameter("api_key", apiKey)
-                .addQueryParameter("format", "json")
-                .build()
+                .addQueryParameter("artist", artist).addQueryParameter("track", track)
+                .addQueryParameter("autocorrect", "1").addQueryParameter("limit", limit.toString())
+                .addQueryParameter("api_key", apiKey).addQueryParameter("format", "json").build()
             val req = Request.Builder().url(url).get().build()
             runCatching {
                 client.newCall(req).execute().use { resp ->
                     val arr = JSONObject(resp.body?.string().orEmpty())
-                        .optJSONObject("similartracks")?.optJSONArray("track")
-                        ?: return@use emptyList()
+                        .optJSONObject("similartracks")?.optJSONArray("track") ?: return@use emptyList()
                     buildList {
                         for (i in 0 until arr.length()) {
                             val t = arr.getJSONObject(i)
@@ -83,13 +70,35 @@ class LastfmApiImpl @Inject constructor() : LastfmApi {
             }.getOrDefault(emptyList())
         }
 
+    /** Top tags for an artist (lowercased) — the mood signal. */
+    suspend fun getArtistTags(artist: String, limit: Int = 12): List<String> =
+        withContext(Dispatchers.IO) {
+            if (artist.isBlank()) return@withContext emptyList()
+            val url = endpoint.toHttpUrl().newBuilder()
+                .addQueryParameter("method", "artist.getTopTags")
+                .addQueryParameter("artist", artist).addQueryParameter("autocorrect", "1")
+                .addQueryParameter("api_key", apiKey).addQueryParameter("format", "json").build()
+            val req = Request.Builder().url(url).get().build()
+            runCatching {
+                client.newCall(req).execute().use { resp ->
+                    val arr = JSONObject(resp.body?.string().orEmpty())
+                        .optJSONObject("toptags")?.optJSONArray("tag") ?: return@use emptyList()
+                    buildList {
+                        for (i in 0 until minOf(arr.length(), limit)) {
+                            val n = arr.getJSONObject(i).optString("name")
+                            if (n.isNotBlank()) add(n.lowercase())
+                        }
+                    }
+                }
+            }.getOrDefault(emptyList())
+        }
+
     private fun signed(params: MutableMap<String, String>): Map<String, String> {
         val sig = buildString {
             params.toSortedMap().forEach { (k, v) -> append(k); append(v) }
             append(secret)
         }
-        params["api_sig"] = md5(sig)
-        params["format"] = "json"
+        params["api_sig"] = md5(sig); params["format"] = "json"
         return params
     }
 
@@ -97,6 +106,5 @@ class LastfmApiImpl @Inject constructor() : LastfmApi {
         FormBody.Builder().apply { params.forEach { (k, v) -> add(k, v) } }.build()
 
     private fun md5(s: String): String =
-        MessageDigest.getInstance("MD5").digest(s.toByteArray())
-            .joinToString("") { "%02x".format(it) }
+        MessageDigest.getInstance("MD5").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 }
