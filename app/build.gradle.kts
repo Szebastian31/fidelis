@@ -75,6 +75,9 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.media3.common)
 
+    implementation(files("libs/spotify-app-remote-release-0.8.0.aar"))
+    implementation("com.google.code.gson:gson:2.11.0")
+
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
