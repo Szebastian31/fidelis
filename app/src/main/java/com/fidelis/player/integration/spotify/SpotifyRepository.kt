@@ -1,7 +1,7 @@
 package com.fidelis.player.integration.spotify
 
 import android.content.Context
-import com.fidelis.player. BuildConfig
+import com.fidelis.player.BuildConfig
 import com.fidelis.player.data.db.MusicDao
 import com.fidelis.player.data.db.SpotifyMatchEntity
 import com.fidelis.player.data.secure.SecureTokenStore
@@ -16,7 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import javax.inject.Inject
-import javax.inject.Singleton
+import javax.inject. Singleton
 
 data class ImportResult(val total: Int, val matched: Int, val gaps: Int)
 
@@ -27,6 +27,9 @@ data class SpotifyPlaylist(
     val trackCount: Int,
     val uri: String,
 )
+
+// 1. NEW: used by the mood builder (needs the artist for tag lookup)
+data class PlaylistTrack(val uri: String, val title: String, val artist: String)
 
 @Singleton
 class SpotifyRepository @Inject constructor(
@@ -75,7 +78,7 @@ class SpotifyRepository @Inject constructor(
     }
 
     /** The user's playlists (paginated), for the Playlists tab. */
-    suspend fun fetchPlaylists(): List<SpotifyPlaylist> = withContext(Dispatchers.IO) {
+    suspend fun fetchPlaylists(): List<SpotifyPlaylist> = withContext(Dispatchers. IO) {
         val token = tokenStore.spotifyAccessToken ?: return@withContext emptyList()
         val out = ArrayList<SpotifyPlaylist>()
         var url: String? = "https://api.spotify.com/v1/me/playlists?limit=50"
@@ -106,10 +109,11 @@ class SpotifyRepository @Inject constructor(
         out
     }
 
-    /** Track URIs for one playlist — feeds the mood builder's lazy queue. */
-    suspend fun fetchPlaylistTrackUris(playlistId: String): List<String> = withContext(Dispatchers.IO) {
+    // 2. REPLACES fetchPlaylistTrackUris: now returns uri + title + artist for the mood builder.
+    /** Tracks for one playlist (uri + title + artist). */
+    suspend fun fetchPlaylistTracks(playlistId: String): List<PlaylistTrack> = withContext(Dispatchers.IO) {
         val token = tokenStore.spotifyAccessToken ?: return@withContext emptyList()
-        val out = ArrayList<String>()
+        val out = ArrayList<PlaylistTrack>()
         var url: String? = "https://api.spotify.com/v1/playlists/$playlistId/tracks?limit=100"
         var pages = 0
         while (url != null && pages < 10) {
@@ -119,8 +123,13 @@ class SpotifyRepository @Inject constructor(
                 val root = JSONObject(resp.body?.string().orEmpty())
                 val items = root.optJSONArray("items") ?: return@use null
                 for (i in 0 until items.length()) {
-                    val uri = items.getJSONObject(i).optJSONObject("track")?.optString("uri")
-                    if (!uri.isNullOrBlank() && uri.startsWith("spotify:track:")) out += uri
+                    val t = items.getJSONObject(i).optJSONObject("track") ?: continue
+                    val uri = t.optString("uri")
+                    if (!uri.startsWith("spotify:track:")) continue
+                    val artists = t.optJSONArray("artists")
+                    val artist = if (artists != null && artists.length() > 0)
+                        artists.getJSONObject(0).optString("name") else ""
+                    out += PlaylistTrack(uri, t.optString("name"), artist)
                 }
                 root.optString("next").takeIf { it.isNotBlank() && it != "null" }
             }
@@ -135,7 +144,7 @@ class SpotifyRepository @Inject constructor(
         var url: String? = "https://api.spotify.com/v1/me/tracks?limit=50"
         var pages = 0
         while (url != null && pages < 40) {
-            val req = Request. Builder().url(url).header("Authorization", "Bearer $token").build()
+            val req = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
             url = client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@use null
                 val root = JSONObject(resp.body?.string().orEmpty())
