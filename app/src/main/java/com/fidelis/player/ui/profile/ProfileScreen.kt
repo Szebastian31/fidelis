@@ -16,8 +16,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.fidelis.player.data.settings.CrossfadePref
-import com.fidelis.player.data.settings.QualityPref
 import com.fidelis.player.ui.theme.Fidelis
 import com.fidelis.player.ui.theme.FidelisBackground
 import com.fidelis.player.ui.theme.GlassCard
@@ -32,8 +30,6 @@ fun ProfileScreen(
     val context = LocalContext.current
     val spotifyConnected by vm.spotifyConnected.collectAsState()
     val lastfmConnected by vm.lastfmConnected.collectAsState()
-    val quality by vm.quality.collectAsState()
-    val crossfade by vm.crossfade.collectAsState()
     val remoteConnected by vm.remoteConnected.collectAsState()
     val remoteConnecting by vm.remoteConnecting.collectAsState()
     val remoteError by vm.remoteError.collectAsState()
@@ -69,12 +65,23 @@ fun ProfileScreen(
                 }
             }
 
-            Section("Playback defaults") {
-                Text("Quality", color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium)
-                ChipRow(QualityPref.entries, quality, { it.label }) { vm.setQuality(it) }
-                Spacer(Modifier.height(8.dp))
-                Text("Crossfade", color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium)
-                ChipRow(CrossfadePref.entries, crossfade, { it.label }) { vm.setCrossfade(it) }
+            Section("Sound & crossfade") {
+                Text(
+                    "Fidelis plays through the Spotify app, so audio quality and crossfade are set there — not in Fidelis.",
+                    color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "For smooth blends, turn on Spotify → Settings → Playback → Crossfade (or Automix). " +
+                        "For best quality on your FreeBuds, set Audio quality to Very High. " +
+                        "Fidelis still orders mood mixes smartly so they flow.",
+                    color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = {
+                    context.packageManager.getLaunchIntentForPackage("com.spotify.music")
+                        ?.let { context.startActivity(it) }
+                }) { Text("Open Spotify") }
             }
 
             Section("Spotify import") {
