@@ -1,9 +1,12 @@
 package com.fidelis.player.integration.spotify
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.fidelis.player.BuildConfig
+import com.fidelis.player.playback.PlaybackService
 import com.spotify.android.appremote.api.ConnectionParams
 import com.spotify.android.appremote.api.Connector
 import com.spotify.android.appremote.api.SpotifyAppRemote
@@ -18,13 +21,14 @@ data class QueueTrack(val uri: String, val title: String, val artist: String)
 
 @Singleton
 class SpotifyRemote @Inject constructor() {
-
     data class Snapshot(
         val title: String, val artist: String, val isPaused: Boolean,
         val positionMs: Long, val durationMs: Long, val imageUri: String?, val uri: String?,
     )
 
     private var appRemote: SpotifyAppRemote? = null
+    private var appContext: Context? = null
+
     private val _connected = MutableStateFlow(false); val connected: StateFlow<Boolean> = _connected.asStateFlow()
     private val _connecting = MutableStateFlow(false); val connecting: StateFlow<Boolean> = _connecting.asStateFlow()
     private val _state = MutableStateFlow<Snapshot?>(null); val state: StateFlow<Snapshot?> = _state.asStateFlow()
@@ -41,6 +45,7 @@ class SpotifyRemote @Inject constructor() {
     fun reportAuthError(message: String?) { _connecting.value = false; _error.value = message ?: "Authorization failed" }
 
     fun connect(context: Context) {
+        appContext = context.applicationContext
         if (appRemote?.isConnected == true) { _connected.value = true; _connecting.value = false; return }
         _connecting.value = true
         val params = ConnectionParams.Builder(BuildConfig.SPOTIFY_CLIENT_ID)
@@ -74,14 +79,17 @@ class SpotifyRemote @Inject constructor() {
         }
     }
 
-    fun playContext(uri: String) { _queue.value = emptyList(); planned.clear(); queued.clear(); appRemote?.playerApi?.play(uri) }
+    fun playContext(uri: String) {
+        _queue.value = emptyList(); planned.clear(); queued.clear()
+        appRemote?.playerApi?.play(uri); ensureService()
+    }
 
     fun playQueue(items: List<QueueTrack>, startIndex: Int = 0) {
         if (items.isEmpty()) return
         _queue.value = items
         planned.clear(); planned.addAll(items.map { it.uri }); queued.clear()
         val start = items.getOrElse(startIndex) { items.first() }
-        appRemote?.playerApi?.play(start.uri); queued.add(start.uri); topUp(start.uri)
+        appRemote?.playerApi?.play(start.uri); queued.add(start.uri); topUp(start.uri); ensureService()
     }
 
     fun reshuffle() {
@@ -102,11 +110,19 @@ class SpotifyRemote @Inject constructor() {
         }
     }
 
+    private fun ensureService() {
+        val ctx = appContext ?: return
+        ContextCompat.startForegroundService(ctx, Intent(ctx, PlaybackService::class.java))
+    }
+
     fun resume() { appRemote?.playerApi?.resume() }
     fun pause() { appRemote?.playerApi?.pause() }
     fun skipNext() { appRemote?.playerApi?.skipNext() }
     fun skipPrevious() { appRemote?.playerApi?.skipPrevious() }
     fun seekTo(ms: Long) { appRemote?.playerApi?.seekTo(ms) }
 
-    fun disconnect() { appRemote?.let { SpotifyAppRemote.disconnect(it) }; appRemote = null; _connected.value = false }
+    fun disconnect() {
+        appRemote?.let { SpotifyAppRemote.disconnect(it) }; appRemote = null; _connected.value = false
+        appContext?.let { it.stopService(Intent(it, PlaybackService::class.java)) }
+    }
 }
