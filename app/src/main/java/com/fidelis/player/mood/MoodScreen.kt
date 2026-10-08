@@ -21,13 +21,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.fidelis.player.mood.Mood
 import com.fidelis.player.mood.MoodTrack
-import com.fidelis.player.mood. Suggestion
+import com.fidelis.player.mood.Suggestion
 import com.fidelis.player.ui.theme.Fidelis
 import com.fidelis.player.ui.theme.FidelisBackground
 import com.fidelis.player.ui.theme.GlassCard
 
 @Composable
-fun MoodScreen(vm: MoodViewModel = hiltViewModel()) {
+fun MoodScreen(onOpenPlayer: () -> Unit, vm: MoodViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val connected by vm.connected.collectAsState()
     val now by vm.nowPlaying.collectAsState()
@@ -55,9 +55,7 @@ fun MoodScreen(vm: MoodViewModel = hiltViewModel()) {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.padding(vertical = 8.dp),
-            ) {
-                items(vm.suggestions) { s -> SuggestionCard(s) { vm.runSuggestion(s) } }
-            }
+            ) { items(vm.suggestions) { s -> SuggestionCard(s) { vm.runSuggestion(s) } } }
 
             Text("BUILD YOUR OWN", color = Fidelis.inkMute, style = MaterialTheme.typography.labelSmall)
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
@@ -86,7 +84,7 @@ fun MoodScreen(vm: MoodViewModel = hiltViewModel()) {
 
             if (vm.result.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { vm.play() }, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = { vm.play(); onOpenPlayer() }, modifier = Modifier.fillMaxWidth()) {
                     Text("Play ${vm.result.size}-track mix")
                 }
                 vm.mixTitle?.let {
@@ -100,15 +98,14 @@ fun MoodScreen(vm: MoodViewModel = hiltViewModel()) {
             }
 
             now?.let {
-                GlassCard(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                GlassCard(Modifier.fillMaxWidth().padding(top = 8.dp).clickable { onOpenPlayer() }) {
                     Row(Modifier.padding(14.dp)) {
                         Column(Modifier.weight(1f)) {
                             Text(it.title.ifBlank { "—" }, color = Fidelis.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(it.artist, color = Fidelis.inkMute, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodySmall)
                         }
-                        Text(if (it.isPaused) "Paused" else "Playing", color = Fidelis.violet,
-                            style = MaterialTheme.typography.labelMedium)
+                        Text("Open ›", color = Fidelis.violet, style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
