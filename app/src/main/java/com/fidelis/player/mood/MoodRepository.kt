@@ -1,6 +1,7 @@
 package com.fidelis.player.mood
 
 import com.fidelis.player.integration.lastfm.LastfmRepository
+import com.fidelis.player.integration.spotify.PlaylistTrack
 import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.SpotifyRepository
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +21,21 @@ enum class Mood(val label: String, val tags: Set<String>) {
 
 data class MoodTrack(val uri: String, val title: String, val artist: String, val score: Int, val matched: List<String>)
 
+sealed class Suggestion(val title: String, val subtitle: String) {
+    data object OnRepeat : Suggestion("On repeat lately", "Your most-played, in order")
+    class MoodMix(val mood: Mood, title: String, subtitle: String) : Suggestion(title, subtitle)
+
+    companion object {
+        val presets: List<Suggestion> = listOf(
+            OnRepeat,
+            MoodMix(Mood.CHILL, "Chill afternoon vibes", "Mellow picks from your rotation"),
+            MoodMix(Mood.ENERGETIC, "Morning energy boost", "High-energy from your top tracks"),
+            MoodMix(Mood.FOCUS, "Deep focus", "Instrumental & minimal"),
+            MoodMix(Mood.PARTY, "Night out", "Danceable & loud"),
+        )
+    }
+}
+
 @Singleton
 class MoodRepository @Inject constructor(
     private val spotify: SpotifyRepository,
@@ -28,19 +44,25 @@ class MoodRepository @Inject constructor(
 ) {
     private val tagCache = ConcurrentHashMap<String, List<String>>()
 
-    /** Score a playlist's tracks against a mood via Last.fm artist tags, best first. */
     suspend fun build(playlistId: String, mood: Mood, limit: Int = 40): List<MoodTrack> =
+        scoreTracks(spotify.fetchPlaylistTracks(playlistId).take(80), mood, limit)
+
+    suspend fun moodFromTop(mood: Mood, timeRange: String = "medium_term", limit: Int = 40): List<MoodTrack> =
+        scoreTracks(spotify.fetchTopTracks(timeRange), mood, limit)
+
+    suspend fun topMix(timeRange: String = "medium_term"): List<MoodTrack> = withContext(Dispatchers.IO) {
+        spotify.fetchTopTracks(timeRange).map { MoodTrack(it.uri, it.title, it.artist, 0, emptyList()) }
+    }
+
+    fun play(tracks: List<MoodTrack>) = remote.playQueue(tracks.map { it.uri })
+
+    private suspend fun scoreTracks(tracks: List<PlaylistTrack>, mood: Mood, limit: Int): List<MoodTrack> =
         withContext(Dispatchers.IO) {
-            val tracks = spotify.fetchPlaylistTracks(playlistId).take(80) // bound Last.fm calls
             tracks.map { t ->
                 val matched = tagsFor(t.artist).filter { it in mood.tags }
                 MoodTrack(t.uri, t.title, t.artist, matched.size, matched)
-            }.filter { it.score > 0 }
-                .sortedByDescending { it.score }
-                .take(limit)
+            }.filter { it.score > 0 }.sortedByDescending { it.score }.take(limit)
         }
-
-    fun play(tracks: List<MoodTrack>) = remote.playQueue(tracks.map { it.uri })
 
     private suspend fun tagsFor(artist: String): List<String> {
         if (artist.isBlank()) return emptyList()
