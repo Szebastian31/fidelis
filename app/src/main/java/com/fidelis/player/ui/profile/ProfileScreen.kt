@@ -1,6 +1,6 @@
 package com.fidelis.player.ui.profile
 
-import android.content.Intent
+import android.content. Intent
 import android.net.Uri
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -31,11 +31,34 @@ fun ProfileScreen(
     val lastfmConnected by vm.lastfmConnected.collectAsState()
     val quality by vm.quality.collectAsState()
     val crossfade by vm.crossfade.collectAsState()
+    val remoteConnected by vm.remoteConnected.collectAsState()
+    val nowPlaying by vm.nowPlaying.collectAsState()
+    val remoteError by vm.remoteError.collectAsState()
     var user by rememberSaveable { mutableStateOf("") }
     var pass by rememberSaveable { mutableStateOf("") }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("Profile", style = MaterialTheme.typography.headlineMedium)
+
+        Label("Spotify playback (bridge)")
+        Text(
+            if (remoteConnected) "Connected to the Spotify app" else "Connecting… open once to approve",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        nowPlaying?.let {
+            Text("${it.title} — ${it.artist}", style = MaterialTheme.typography.bodySmall)
+        }
+        Spacer(Modifier.height(8.dp))
+        Row {
+            Button(onClick = { vm.testPlay() }, enabled = remoteConnected) { Text("Play test playlist") }
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(onClick = { vm.togglePlay() }, enabled = remoteConnected) { Text("Play/Pause") }
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(onClick = { vm.next() }, enabled = remoteConnected) { Text("Next") }
+        }
+        remoteError?.let {
+            Text("Bridge error: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
 
         Label("Skins")
         ChipRow(Skin.entries, current, { it.label }) { onSkinChange(it) }
@@ -43,28 +66,16 @@ fun ProfileScreen(
         Label("Playback defaults")
         Text("Quality", style = MaterialTheme.typography.bodyMedium)
         ChipRow(QualityPref.entries, quality, { it.label }) { vm.setQuality(it) }
-        Text(
-            "Which copy to play when you own a track in more than one format.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         Spacer(Modifier.height(8.dp))
         Text("Crossfade", style = MaterialTheme.typography.bodyMedium)
         ChipRow(CrossfadePref.entries, crossfade, { it.label }) { vm.setCrossfade(it) }
-        Text(
-            "Auto blends by tempo and key; or pick a fixed length.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
-        Label("Spotify")
+        Label("Spotify import")
         if (!spotifyConnected) {
             Button(onClick = {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.spotifyAuthUrl())))
             }) { Text("Connect Spotify") }
         } else {
-            Text("Connected", style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(8.dp))
             Button(onClick = { vm.importLibrary() }, enabled = !vm.importing) {
                 Text(if (vm.importing) "Importing…" else "Import my library")
             }
@@ -76,15 +87,10 @@ fun ProfileScreen(
 
         Label("Last.fm scrobbling")
         if (!lastfmConnected) {
-            OutlinedTextField(
-                value = user, onValueChange = { user = it },
-                label = { Text("Username") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            OutlinedTextField(user, { user = it }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
-                value = pass, onValueChange = { pass = it },
-                label = { Text("Password") }, singleLine = true,
+                pass, { pass = it }, label = { Text("Password") }, singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 modifier = Modifier.fillMaxWidth(),
@@ -97,9 +103,7 @@ fun ProfileScreen(
             Text("Connected — plays scrobble automatically", style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = { vm.disconnectLastfm() }) { Text("Disconnect") }
         }
-        vm.lastfmStatus?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-        }
+        vm.lastfmStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
 
         Spacer(Modifier.height(24.dp))
     }
@@ -107,7 +111,7 @@ fun ProfileScreen(
 
 @Composable
 private fun Label(text: String) {
-    Text(text, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+    Text(text, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 20.dp, bottom = 6.dp))
 }
 
 @Composable
