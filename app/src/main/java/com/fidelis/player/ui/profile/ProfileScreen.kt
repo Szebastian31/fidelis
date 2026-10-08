@@ -34,8 +34,8 @@ fun ProfileScreen(
     val lastfmConnected by vm.lastfmConnected.collectAsState()
     val quality by vm.quality.collectAsState()
     val crossfade by vm.crossfade.collectAsState()
-    val remoteConnecting by vm.remoteConnecting.collectAsState()
     val remoteConnected by vm.remoteConnected.collectAsState()
+    val remoteConnecting by vm.remoteConnecting.collectAsState()
     val remoteError by vm.remoteError.collectAsState()
     val now by vm.nowPlaying.collectAsState()
     var user by rememberSaveable { mutableStateOf("") }
@@ -59,7 +59,7 @@ fun ProfileScreen(
                 }
                 if (!remoteConnected) {
                     Spacer(Modifier.height(10.dp))
-                    Button(onClick = { vm.connectBridge(context) }) {
+                    Button(onClick = { (context as? com.fidelis.player.MainActivity)?.authorizeSpotify() }) {
                         Text(if (remoteConnecting) "Retry connect" else "Connect playback")
                     }
                 }
@@ -75,6 +75,20 @@ fun ProfileScreen(
                 Spacer(Modifier.height(8.dp))
                 Text("Crossfade", color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium)
                 ChipRow(CrossfadePref.entries, crossfade, { it.label }) { vm.setCrossfade(it) }
+            }
+
+            Section("Spotify import") {
+                if (!spotifyConnected) {
+                    Button(onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.spotifyAuthUrl())))
+                    }) { Text("Connect Spotify") }
+                } else {
+                    Button(onClick = { vm.importLibrary() }, enabled = !vm.importing) {
+                        Text(if (vm.importing) "Importing…" else "Import my library")
+                    }
+                    TextButton(onClick = { vm.disconnectSpotify() }) { Text("Disconnect") }
+                }
+                vm.importStatus?.let { Text(it, color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall) }
             }
 
             Section("Last.fm scrobbling") {
