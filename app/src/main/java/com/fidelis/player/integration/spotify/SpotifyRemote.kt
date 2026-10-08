@@ -35,16 +35,20 @@ class SpotifyRemote @Inject constructor() {
     private val queued = HashSet<String>()
     private val ahead = 3
 
+    fun markConnecting() { _connecting.value = true; _error.value = null }
+    fun reportAuthError(message: String?) { _connecting.value = false; _error.value = message ?: "Authorization failed" }
+
     fun connect(context: Context) {
-        if (appRemote?.isConnected == true) { _connected.value = true; return }
+        if (appRemote?.isConnected == true) { _connected.value = true; _connecting.value = false; return }
         _connecting.value = true
-        _error.value = null
         val params = ConnectionParams.Builder(BuildConfig.SPOTIFY_CLIENT_ID)
-            .setRedirectUri("fidelis://auth").showAuthView(true).build()
+            .setRedirectUri("fidelis://auth")
+            .showAuthView(false) // auth is done up-front by the auth-lib in MainActivity
+            .build()
         try {
             SpotifyAppRemote.connect(context, params, object : Connector.ConnectionListener {
                 override fun onConnected(remote: SpotifyAppRemote) {
-                    Log.i("FidelisBridge", "App Remote connected")
+                    Log.i("FidelisBridge", "connected")
                     appRemote = remote; _connected.value = true; _connecting.value = false; _error.value = null
                     remote.playerApi.subscribeToPlayerState().setEventCallback { ps: PlayerState ->
                         val t = ps.track
@@ -57,13 +61,12 @@ class SpotifyRemote @Inject constructor() {
                     }
                 }
                 override fun onFailure(error: Throwable) {
-                    Log.e("FidelisBridge", "App Remote failure", error)
+                    Log.e("FidelisBridge", "failure", error)
                     _connected.value = false; _connecting.value = false
                     _error.value = error.message ?: error.javaClass.simpleName
                 }
             })
         } catch (t: Throwable) {
-            Log.e("FidelisBridge", "connect() threw", t)
             _connecting.value = false
             _error.value = "connect(): ${t.message ?: t.javaClass.simpleName}"
         }
