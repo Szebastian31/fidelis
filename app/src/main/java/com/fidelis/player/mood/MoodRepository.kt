@@ -2,6 +2,7 @@ package com.fidelis.player.mood
 
 import com.fidelis.player.integration.lastfm.LastfmRepository
 import com.fidelis.player.integration.spotify.PlaylistTrack
+import com.fidelis.player.integration.spotify.QueueTrack
 import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.SpotifyRepository
 import kotlinx.coroutines.Dispatchers
@@ -54,7 +55,8 @@ class MoodRepository @Inject constructor(
         spotify.fetchTopTracks(timeRange).map { MoodTrack(it.uri, it.title, it.artist, 0, emptyList()) }
     }
 
-    fun play(tracks: List<MoodTrack>) = remote.playQueue(tracks.map { it.uri })
+    fun play(tracks: List<MoodTrack>) =
+        remote.playQueue(tracks.map { QueueTrack(it.uri, it.title, it.artist) })
 
     private suspend fun scoreTracks(tracks: List<PlaylistTrack>, mood: Mood, limit: Int): List<MoodTrack> =
         withContext(Dispatchers.IO) {
