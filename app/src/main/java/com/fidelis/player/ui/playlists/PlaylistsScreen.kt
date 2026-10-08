@@ -1,6 +1,6 @@
 package com.fidelis.player.ui.playlists
 
-import android.content.Intent
+import android.content. Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,8 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui. Modifier
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -23,13 +22,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.fidelis.player.integration.spotify.SpotifyPlaylist
-import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.ui.theme.Fidelis
 import com.fidelis.player.ui.theme.FidelisBackground
 import com.fidelis.player.ui.theme.GlassCard
 
 @Composable
-fun PlaylistsScreen(vm: PlaylistsViewModel = hiltViewModel()) {
+fun PlaylistsScreen(
+    onOpenPlaylist: (String) -> Unit,
+    onOpenPlayer: () -> Unit,
+    vm: PlaylistsViewModel = hiltViewModel(),
+) {
     val context = LocalContext.current
     val connected by vm.connected.collectAsState()
     val now by vm.nowPlaying.collectAsState()
@@ -39,7 +41,6 @@ fun PlaylistsScreen(vm: PlaylistsViewModel = hiltViewModel()) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
             Text("Playlists", color = Fidelis.ink, style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(12.dp))
-
             when {
                 !connected -> GlassCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(20.dp)) {
@@ -56,10 +57,20 @@ fun PlaylistsScreen(vm: PlaylistsViewModel = hiltViewModel()) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f),
-                ) { items(vm.playlists) { p -> PlaylistCard(p) { vm.play(p) } } }
+                ) { items(vm.playlists) { p -> PlaylistCard(p) { onOpenPlaylist(p.id) } } }
             }
-
-            now?.let { NowPlayingBar(it) { vm.togglePlay() } }
+            now?.let {
+                GlassCard(Modifier.fillMaxWidth().padding(top = 12.dp).clickable { onOpenPlayer() }) {
+                    Row(Modifier.padding(14.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text(it.title.ifBlank { "—" }, color = Fidelis.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(it.artist, color = Fidelis.inkMute, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text("Open ›", color = Fidelis.violet, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
         }
     }
 }
@@ -76,22 +87,6 @@ private fun PlaylistCard(p: SpotifyPlaylist, onClick: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Text(p.name, color = Fidelis.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.titleSmall)
-            Text("${p.trackCount} tracks", color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-@Composable
-private fun NowPlayingBar(s: SpotifyRemote.Snapshot, onToggle: () -> Unit) {
-    GlassCard(Modifier.fillMaxWidth().padding(top = 12.dp).clickable(onClick = onToggle)) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(s.title.ifBlank { "—" }, color = Fidelis.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(s.artist, color = Fidelis.inkMute, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall)
-            }
-            Text(if (s.isPaused) "Paused" else "Playing", color = Fidelis.violet,
-                style = MaterialTheme.typography.labelMedium)
         }
     }
 }
