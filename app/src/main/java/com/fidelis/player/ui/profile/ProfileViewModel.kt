@@ -9,6 +9,7 @@ import com.fidelis.player.data.settings.CrossfadePref
 import com.fidelis.player.data.settings.PlaybackSettings
 import com.fidelis.player.data.settings.QualityPref
 import com.fidelis.player.integration.lastfm.LastfmRepository
+import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.SpotifyRepository
 import com.fidelis.player.playback.crossfade.CrossfadeEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,9 +23,10 @@ class ProfileViewModel @Inject constructor(
     private val lastfm: LastfmRepository,
     private val settings: PlaybackSettings,
     private val crossfadeEngine: CrossfadeEngine,
+    private val remote: SpotifyRemote,
 ) : ViewModel() {
 
-    // Spotify
+    // Spotify Web API (import)
     val spotifyConnected: StateFlow<Boolean> = spotify.connected
     var importing by mutableStateOf(false); private set
     var importStatus by mutableStateOf<String?>(null); private set
@@ -40,6 +42,15 @@ class ProfileViewModel @Inject constructor(
         }
     }
     fun disconnectSpotify() { spotify.disconnect(); importStatus = null }
+
+    // Spotify bridge (playback)
+    val remoteConnected: StateFlow<Boolean> = remote.connected
+    val nowPlaying: StateFlow<SpotifyRemote.Snapshot?> = remote.state
+    val remoteError: StateFlow<String?> = remote.error
+
+    fun testPlay() = remote.playContext("spotify:playlist:37i9dQZF1DXcBWIGoYBM5M") // Today's Top Hits
+    fun togglePlay() { if (nowPlaying.value?.isPaused == true) remote.resume() else remote.pause() }
+    fun next() = remote.skipNext()
 
     // Last.fm
     val lastfmConnected: StateFlow<Boolean> = lastfm.connected
@@ -60,10 +71,9 @@ class ProfileViewModel @Inject constructor(
     // Playback defaults
     val quality: StateFlow<QualityPref> = settings.quality
     val crossfade: StateFlow<CrossfadePref> = settings.crossfade
-
     fun setQuality(q: QualityPref) = settings.setQuality(q)
     fun setCrossfade(c: CrossfadePref) {
         settings.setCrossfade(c)
-        crossfadeEngine.userPreferenceMs = c.ms  // takes effect on the next transition
+        crossfadeEngine.userPreferenceMs = c.ms
     }
 }
