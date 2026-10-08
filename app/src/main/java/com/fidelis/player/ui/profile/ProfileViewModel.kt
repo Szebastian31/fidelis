@@ -1,5 +1,6 @@
 package com.fidelis.player.ui.profile
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -26,37 +27,32 @@ class ProfileViewModel @Inject constructor(
     private val remote: SpotifyRemote,
 ) : ViewModel() {
 
+    // Spotify bridge (playback)
+    val remoteConnected: StateFlow<Boolean> = remote.connected
+    val nowPlaying: StateFlow<SpotifyRemote.Snapshot?> = remote.state
+    val remoteError: StateFlow<String?> = remote.error
+    fun connectBridge(context: Context) = remote.connect(context)
+
     // Spotify Web API (import)
     val spotifyConnected: StateFlow<Boolean> = spotify.connected
     var importing by mutableStateOf(false); private set
     var importStatus by mutableStateOf<String?>(null); private set
-
     fun spotifyAuthUrl(): String = spotify.authUrl()
     fun importLibrary() {
         if (importing) return
         viewModelScope.launch {
             importing = true; importStatus = "Importing…"
             val r = spotify.importLibrary { c -> importStatus = "Fetched $c liked tracks…" }
-            importStatus = "Imported ${r.total} • matched ${r.matched} • ${r.gaps} gaps"
+            importStatus = "Imported ${r.total}"
             importing = false
         }
     }
     fun disconnectSpotify() { spotify.disconnect(); importStatus = null }
 
-    // Spotify bridge (playback)
-    val remoteConnected: StateFlow<Boolean> = remote.connected
-    val nowPlaying: StateFlow<SpotifyRemote.Snapshot?> = remote.state
-    val remoteError: StateFlow<String?> = remote.error
-
-    fun testPlay() = remote.playContext("spotify:playlist:37i9dQZF1DXcBWIGoYBM5M") // Today's Top Hits
-    fun togglePlay() { if (nowPlaying.value?.isPaused == true) remote.resume() else remote.pause() }
-    fun next() = remote.skipNext()
-
     // Last.fm
     val lastfmConnected: StateFlow<Boolean> = lastfm.connected
     var lastfmBusy by mutableStateOf(false); private set
     var lastfmStatus by mutableStateOf<String?>(null); private set
-
     fun connectLastfm(username: String, password: String) {
         if (lastfmBusy || username.isBlank() || password.isBlank()) return
         viewModelScope.launch {
@@ -73,7 +69,6 @@ class ProfileViewModel @Inject constructor(
     val crossfade: StateFlow<CrossfadePref> = settings.crossfade
     fun setQuality(q: QualityPref) = settings.setQuality(q)
     fun setCrossfade(c: CrossfadePref) {
-        settings.setCrossfade(c)
-        crossfadeEngine.userPreferenceMs = c.ms
+        settings.setCrossfade(c); crossfadeEngine.userPreferenceMs = c.ms
     }
 }
