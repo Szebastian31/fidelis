@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
+import com.fidelis.player.integration.lastfm.BridgeScrobbler
 import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.SpotifyRepository
 import com.fidelis.player.ui.navigation.AppNavHost
@@ -29,28 +30,37 @@ import com.spotify.sdk.android.auth.AuthorizationRequest
 import com.spotify.sdk.android.auth.AuthorizationResponse
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+import javax.inject. Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var spotify: SpotifyRepository
     @Inject lateinit var spotifyRemote: SpotifyRemote
+    @Inject lateinit var scrobbler: BridgeScrobbler
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         handleIntent(intent)
+        scrobbler.start()
 
         // Android 13+: the media notification won't show without this grant.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(android. Manifest.permission.POST_NOTIFICATIONS) !=
+            checkSelfPermission(android.Manifest.permission. POST_NOTIFICATIONS) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 2001)
         }
 
+        val uiPrefs = getSharedPreferences("fidelis_ui", MODE_PRIVATE)
+
         setContent {
-            var skin by remember { mutableStateOf(Skin.Midnight) }
+            var skin by remember {
+                mutableStateOf(
+                    runCatching { Skin.valueOf(uiPrefs.getString("skin", null).orEmpty()) }
+                        .getOrDefault(Skin.Midnight)
+                )
+            }
             FidelisTheme(skin = skin) {
                 val nav = rememberNavController()
                 Scaffold(
@@ -58,8 +68,11 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize().background(Fidelis.skyGradient),
                     bottomBar = { BottomBar(nav) },
                 ) { padding ->
-                    AppNavHost(nav = nav, currentSkin = skin, onSkinChange = { skin = it },
-                        modifier = Modifier.padding(padding))
+                    AppNavHost(
+                        nav = nav, currentSkin = skin,
+                        onSkinChange = { skin = it; uiPrefs.edit().putString("skin", it.name).apply() },
+                        modifier = Modifier.padding(padding),
+                    )
                 }
             }
         }
@@ -70,7 +83,7 @@ class MainActivity : ComponentActivity() {
         spotifyRemote.markConnecting()
         val request = AuthorizationRequest.Builder(
             BuildConfig.SPOTIFY_CLIENT_ID,
-            AuthorizationResponse.Type. TOKEN,
+            AuthorizationResponse.Type.TOKEN,
             "fidelis://auth",
         ).setScopes(arrayOf("app-remote-control", "streaming", "user-modify-playback-state")).build()
         AuthorizationClient.openLoginActivity(this, SPOTIFY_AUTH_REQUEST, request)
@@ -89,8 +102,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Reconnect when returning; it's a no-op if already connected.
     override fun onStart() { super.onStart(); spotifyRemote.connect(this) }
-    override fun onStop() { spotifyRemote.disconnect(); super.onStop() }
+
+    // Stay connected in the background so the notification and scrobbling keep working.
+    // Only let go when the app is truly closed and nothing is playing.
+    override fun onDestroy() {
+        if (isFinishing && spotifyRemote.state.value?.isPaused != false) spotifyRemote.disconnect()
+        super.onDestroy()
+    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent); setIntent(intent); handleIntent(intent)
