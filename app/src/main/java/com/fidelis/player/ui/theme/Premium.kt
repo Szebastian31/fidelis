@@ -16,10 +16,12 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3. Text
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -44,27 +46,36 @@ import com.fidelis.player.integration.spotify.SpotifyRemote
 /** Design tokens. Every screen pulls colour from here, never ad-hoc. */
 object Fidelis {
     val bg0 = Color(0xFF080B1F); val bg1 = Color(0xFF12183D); val bg2 = Color(0xFF1E2252)
-    val violet = Color(0xFFB49CFF); val pink = Color(0xFFE4657F); val purple = Color(0xFF8B5CC7)
+
+    // Accent colours follow the selected theme (see Skin / FidelisTheme).
+    var purple by mutableStateOf(Skin.Midnight.start); private set
+    var pink by mutableStateOf(Skin.Midnight.end); private set
+    var violet by mutableStateOf(Skin.Midnight.highlight); private set
+
     val orange = Color(0xFFFF9E5A); val sky = Color(0xFF7CC4F5)
     val ink = Color(0xFFFFFFFF); val inkSoft = Color(0xD9FFFFFF)
     val inkMute = Color(0x8CFFFFFF); val inkFaint = Color(0x52FFFFFF)
     val glass = Color(0x14FFFFFF); val glassStrong = Color(0x26FFFFFF); val line = Color(0x1FFFFFFF)
     val border = Brush.verticalGradient(listOf(Color(0x3DFFFFFF), Color(0x0AFFFFFF)))
     val skyGradient = Brush.verticalGradient(listOf(bg0, bg1, bg2))
-    val accent = Brush.linearGradient(listOf(purple, pink))
+    val accent: Brush get() = Brush.linearGradient(listOf(purple, pink))
+
+    fun applySkin(s: Skin) { purple = s.start; pink = s.end; violet = s.highlight }
 }
 
 /** Midnight gradient with two soft colour glows: the backdrop for every screen. */
 @Composable
 fun FidelisBackground(content: @Composable () -> Unit) {
+    val glowA = Fidelis.purple
+    val glowB = Fidelis.pink
     Box(
         Modifier.fillMaxSize().background(Fidelis.skyGradient).drawBehind {
             drawRect(Brush.radialGradient(
-                listOf(Fidelis.purple.copy(alpha = 0.32f), Color.Transparent),
+                listOf(glowA.copy(alpha = 0.32f), Color.Transparent),
                 center = Offset(size.width * 0.15f, 0f), radius = size.width * 0.95f,
             ))
             drawRect(Brush.radialGradient(
-                listOf(Fidelis.pink.copy(alpha = 0.14f), Color.Transparent),
+                listOf(glowB.copy(alpha = 0.14f), Color.Transparent),
                 center = Offset(size.width, size.height * 0.78f), radius = size.width * 0.85f,
             ))
         }
@@ -145,7 +156,7 @@ fun FidelisChip(label: String, selected: Boolean, onClick: () -> Unit, modifier:
              else Modifier.background(Fidelis.glass).border(1.dp, Fidelis.line, CircleShape)
     Box(modifier.clip(CircleShape).then(bg).pressable(onClick = onClick).padding(horizontal = 16.dp, vertical = 9.dp)) {
         Text(label, color = if (selected) Fidelis.ink else Fidelis.inkSoft,
-            style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow. Ellipsis)
+            style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
