@@ -7,15 +7,18 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
-import android.os.Build
+import android.os. Build
 import android.os.IBinder
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
 import com.fidelis.player.MainActivity
+import com.fidelis.player.R
 import com.fidelis.player.integration.spotify.SpotifyRemote
+import com.fidelis.player.ui.theme.Fidelis
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -79,7 +82,7 @@ class PlaybackService : Service() {
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, snap?.title ?: "")
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, snap?.artist ?: "")
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, snap?.durationMs ?: 0L)
-        if (art != null) meta.putBitmap(MediaMetadataCompat. METADATA_KEY_ALBUM_ART, art)
+        if (art != null) meta.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, art)
         session.setMetadata(meta.build())
 
         val paused = snap?.isPaused ?: true
@@ -89,7 +92,7 @@ class PlaybackService : Service() {
                     PlaybackStateCompat.ACTION_PLAY or PlaybackStateCompat.ACTION_PAUSE or
                         PlaybackStateCompat.ACTION_PLAY_PAUSE or
                         PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                        PlaybackStateCompat. ACTION_SKIP_TO_PREVIOUS or
                         PlaybackStateCompat.ACTION_SEEK_TO
                 )
                 .setState(
@@ -103,7 +106,7 @@ class PlaybackService : Service() {
 
     private fun buildNotification(snap: SpotifyRemote.Snapshot?, art: Bitmap?) =
         NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android. R.drawable.ic_media_play) // TODO: swap for a monochrome ic_stat_fidelis
+            .setSmallIcon(R.drawable.ic_stat_fidelis)
             .setContentTitle(snap?.title?.ifBlank { null } ?: "Fidelis")
             .setContentText(snap?.artist ?: "")
             .setLargeIcon(art)
@@ -119,7 +122,7 @@ class PlaybackService : Service() {
             .setOnlyAlertOnce(true)
             .setOngoing(snap?.isPaused == false)
             .setColorized(true)
-            .setColor(0xFF8B5CC7.toInt()) // Fidelis purple → tints the ColorOS media card
+            .setColor(Fidelis.purple.toArgb()) // follows the selected theme
             .addAction(android.R.drawable.ic_media_previous, "Previous", action(ACTION_PREV))
             .addAction(
                 if (snap?.isPaused == false) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
@@ -140,7 +143,7 @@ class PlaybackService : Service() {
     )
 
     private fun startForegroundCompat(notification: android.app.Notification) {
-        if (Build.VERSION. SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
         } else {
             startForeground(NOTIF_ID, notification)
