@@ -2,24 +2,33 @@ package com.fidelis.player.ui.profile
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.fidelis.player.ui.theme.Fidelis
-import com.fidelis.player.ui.theme.FidelisBackground
-import com.fidelis.player.ui.theme.GlassCard
-import com.fidelis.player.ui.theme.Skin
+import com.fidelis.player.MainActivity
+import com.fidelis.player.ui.theme.*
 
 @Composable
 fun ProfileScreen(
@@ -38,111 +47,146 @@ fun ProfileScreen(
     var pass by rememberSaveable { mutableStateOf("") }
 
     FidelisBackground {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-            Text("Profile", color = Fidelis.ink, style = MaterialTheme.typography.headlineMedium)
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp).padding(bottom = 32.dp),
+        ) {
+            ScreenHeader(title = "Profile", eyebrow = "Accounts & sound")
 
-            Section("Spotify playback") {
-                Text(
-                    when {
+            SectionLabel("Spotify")
+            SettingsCard {
+                StatusRow(
+                    title = "Playback",
+                    subtitle = when {
                         remoteConnected -> "Connected to the Spotify app"
-                        remoteConnecting -> "Connecting…"
-                        else -> "Not connected — tap Connect, then approve in Spotify."
+                        remoteConnecting -> "Connecting… approve in Spotify if asked"
+                        else -> "Not connected"
                     },
-                    color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium,
+                    ok = remoteConnected,
                 )
-                now?.let {
-                    Text("${it.title} — ${it.artist}", color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall)
-                }
-                if (!remoteConnected) {
-                    Spacer(Modifier.height(10.dp))
-                    Button(onClick = { (context as? com.fidelis.player.MainActivity)?.authorizeSpotify() }) {
-                        Text(if (remoteConnecting) "Retry connect" else "Connect playback")
-                    }
+                now?.takeIf { remoteConnected && it.title.isNotBlank() }?.let {
+                    Text("Playing ${it.title} · ${it.artist}", color = Fidelis.inkMute,
+                        style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow. Ellipsis,
+                        modifier = Modifier.padding(start = 20.dp, top = 6.dp))
                 }
                 remoteError?.let {
-                    Spacer(Modifier.height(6.dp))
-                    Text("Bridge error: $it", color = Fidelis.pink, style = MaterialTheme.typography.labelSmall)
+                    Text(it, color = Fidelis.pink, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 20.dp, top = 6.dp))
+                }
+                if (!remoteConnected) {
+                    Spacer(Modifier.height(14.dp))
+                    GradientButton(
+                        if (remoteConnecting) "Retry connection" else "Connect playback",
+                        { (context as? MainActivity)?.authorizeSpotify() },
+                        Modifier.fillMaxWidth(),
+                    )
+                }
+
+                CardDivider()
+
+                StatusRow(
+                    title = "Library",
+                    subtitle = if (spotifyConnected) "Playlists and listening history" else "Not connected",
+                    ok = spotifyConnected,
+                )
+                Spacer(Modifier.height(14.dp))
+                if (!spotifyConnected) {
+                    GradientButton("Connect Spotify", {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.spotifyAuthUrl())))
+                    }, Modifier.fillMaxWidth())
+                } else {
+                    SoftButton("Disconnect", vm::disconnectSpotify, Modifier.fillMaxWidth())
                 }
             }
 
-            Section("Sound & crossfade") {
-                Text(
-                    "Fidelis plays through the Spotify app, so audio quality and crossfade are set there — not in Fidelis.",
-                    color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium,
-                )
+            SectionLabel("Sound")
+            SettingsCard {
+                Text("Sound quality and crossfade", color = Fidelis.ink, style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "For smooth blends, turn on Spotify → Settings → Playback → Crossfade (or Automix). " +
-                        "For best quality on your FreeBuds, set Audio quality to Very High. " +
-                        "Fidelis still orders mood mixes smartly so they flow.",
+                    "Fidelis plays through the Spotify app, so these are set in Spotify. " +
+                        "For your FreeBuds, set Audio quality to Very High or Lossless, and turn on " +
+                        "Crossfade or Automix under Playback. Fidelis still orders mood mixes so they flow.",
                     color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
                 )
-                Spacer(Modifier.height(10.dp))
-                Button(onClick = {
+                Spacer(Modifier.height(14.dp))
+                SoftButton("Open Spotify", {
                     context.packageManager.getLaunchIntentForPackage("com.spotify.music")
                         ?.let { context.startActivity(it) }
-                }) { Text("Open Spotify") }
+                }, Modifier.fillMaxWidth(), icon = Icons.AutoMirrored.Rounded.OpenInNew)
             }
 
-            Section("Spotify import") {
-                if (!spotifyConnected) {
-                    Button(onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.spotifyAuthUrl())))
-                    }) { Text("Connect Spotify") }
-                } else {
-                    Button(onClick = { vm.importLibrary() }, enabled = !vm.importing) {
-                        Text(if (vm.importing) "Importing…" else "Import my library")
-                    }
-                    TextButton(onClick = { vm.disconnectSpotify() }) { Text("Disconnect") }
-                }
-                vm.importStatus?.let { Text(it, color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall) }
-            }
-
-            Section("Last.fm scrobbling") {
+            SectionLabel("Last.fm")
+            SettingsCard {
                 if (!lastfmConnected) {
-                    OutlinedTextField(user, { user = it }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        pass, { pass = it }, label = { Text("Password") }, singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth(),
+                    StatusRow("Scrobbling", "Sign in to log what you play", ok = false)
+                    Spacer(Modifier.height(14.dp))
+                    FidelisField(user, { user = it }, "Username")
+                    Spacer(Modifier.height(10.dp))
+                    FidelisField(pass, { pass = it }, "Password", password = true)
+                    Spacer(Modifier.height(14.dp))
+                    GradientButton(
+                        if (vm.lastfmBusy) "Signing in…" else "Connect Last.fm",
+                        { vm.connectLastfm(user, pass); pass = "" },
+                        Modifier.fillMaxWidth(),
+                        enabled = !vm.lastfmBusy && user.isNotBlank() && pass.isNotBlank(),
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = { vm.connectLastfm(user, pass); pass = "" }, enabled = !vm.lastfmBusy) {
-                        Text(if (vm.lastfmBusy) "Signing in…" else "Connect Last.fm")
-                    }
                 } else {
-                    Text("Connected — plays scrobble automatically", color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium)
-                    TextButton(onClick = { vm.disconnectLastfm() }) { Text("Disconnect") }
+                    StatusRow("Scrobbling", "Connected to Last.fm", ok = true)
+                    Spacer(Modifier.height(14.dp))
+                    SoftButton("Disconnect", vm::disconnectLastfm, Modifier.fillMaxWidth())
                 }
-                vm.lastfmStatus?.let { Text(it, color = Fidelis.pink, style = MaterialTheme.typography.bodySmall) }
+                vm.lastfmStatus?.let {
+                    Text(it, color = Fidelis.pink, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp))
+                }
             }
 
-            Section("Skins") {
-                ChipRow(Skin.entries, current, { it.label }) { onSkinChange(it) }
+            SectionLabel("Theme")
+            SettingsCard {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Skin.entries.forEach { s -> FidelisChip(s.label, s == current, { onSkinChange(s) }) }
+                }
             }
-
-            Spacer(Modifier.height(24.dp))
         }
     }
 }
 
 @Composable
-private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Text(title, color = Fidelis.inkMute, style = MaterialTheme.typography.labelLarge,
-        modifier = Modifier.padding(top = 20.dp, bottom = 6.dp))
-    GlassCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), content = content) }
+private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
+    GlassCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), content = content) }
 }
 
 @Composable
-private fun <T> ChipRow(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
-    Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
-        options.forEach { opt ->
-            FilterChip(
-                selected = opt == selected, onClick = { onSelect(opt) },
-                label = { Text(label(opt)) }, modifier = Modifier.padding(end = 8.dp),
-            )
+private fun StatusRow(title: String, subtitle: String, ok: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(if (ok) Color(0xFF4ADE80) else Fidelis.inkFaint))
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(title, color = Fidelis.ink, style = MaterialTheme.typography.titleSmall)
+            Text(subtitle, color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+@Composable
+private fun CardDivider() {
+    Box(Modifier.fillMaxWidth().padding(vertical = 16.dp).height(1.dp).background(Fidelis.line))
+}
+
+@Composable
+private fun FidelisField(value: String, onChange: (String) -> Unit, label: String, password: Boolean = false) {
+    OutlinedTextField(
+        value = value, onValueChange = onChange, label = { Text(label) }, singleLine = true,
+        visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else KeyboardType.Text),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = Fidelis.ink, unfocusedTextColor = Fidelis.ink,
+            focusedBorderColor = Fidelis.violet, unfocusedBorderColor = Fidelis.line,
+            focusedLabelColor = Fidelis.violet, unfocusedLabelColor = Fidelis.inkMute,
+            cursorColor = Fidelis.violet,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
