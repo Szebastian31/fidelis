@@ -6,7 +6,7 @@ import com.fidelis.player.integration.spotify.PlaylistTrack
 import com.fidelis.player.integration.spotify.QueueTrack
 import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.SpotifyRepository
-import kotlinx.coroutines. Dispatchers
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync. Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
@@ -171,7 +171,8 @@ class MoodRepository @Inject constructor(
                     val prev = counts[k]
                     counts[k] = (a to t) to ((prev?.second ?: 0) + 1)
                 }
-                var candidates = counts.values.sortedByDescending { it.second }.map { it.first }
+                var candidates: List<Pair<String, String>> = counts.values
+                    .sortedByDescending { it.second }.map { it.first }
                     .distinctBy { it.first.lowercase() } // one song per new artist
                     .take(limit)
 
@@ -184,14 +185,13 @@ class MoodRepository @Inject constructor(
                 // 4) Find them on Spotify.
                 val need = limit - own.size
                 val found = fetchAll("Matching on Spotify", candidates.take(need + 6), permits = 3) { (a, t) ->
-                    listOfNotNull(spotify.findTrack(a, t)?.let { "${it.uri}\u0001${it.title}\u0001${it.artist}\u0001${it.imageUrl.orEmpty()}" })
+                    listOfNotNull(spotify.findTrack(a, t))
                 }
                 val fresh = candidates.mapNotNull { found[it]?.firstOrNull() }
-                    .map { it.split("\u0001") }
-                    .filter { it[0] !in knownUris }
-                    .distinctBy { it[0] }
+                    .filter { it.uri !in knownUris }
+                    .distinctBy { it.uri }
                     .take(need)
-                    .map { MoodTrack(it[0], it[1], it[2], 0, listOf("new for you"), it[3].ifBlank { null }, isNew = true) }
+                    .map { MoodTrack(it.uri, it.title, it.artist, 0, listOf("new for you"), it.imageUrl, isNew = true) }
 
                 // 5) Blend: two of yours, then one new.
                 val out = ArrayList<MoodTrack>()
@@ -292,9 +292,9 @@ class MoodRepository @Inject constructor(
     }
 
     /** Runs [fetch] a few at a time (polite to Last.fm/Spotify) and reports progress. */
-    private suspend fun <K> fetchAll(
-        phase: String, keys: List<K>, permits: Int = 4, fetch: suspend (K) -> List<String>,
-    ): Map<K, List<String>> = coroutineScope {
+    private suspend fun <K, V> fetchAll(
+        phase: String, keys: List<K>, permits: Int = 4, fetch: suspend (K) -> List<V>,
+    ): Map<K, List<V>> = coroutineScope {
         val sem = Semaphore(permits)
         val done = AtomicInteger()
         _progress.value = MixProgress(phase, 0, keys.size)
