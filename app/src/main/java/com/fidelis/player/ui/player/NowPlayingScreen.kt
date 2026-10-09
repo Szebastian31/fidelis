@@ -1,16 +1,19 @@
 package com.fidelis.player.ui.player
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape. RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.MaterialTheme
@@ -24,11 +27,19 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.fidelis.player.ui.theme.*
@@ -51,92 +62,144 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
     val currentIndex = queue.indexOfFirst { it.uri == snap?.uri }
     val upNext = if (currentIndex >= 0) queue.drop(currentIndex + 1) else queue
 
-    FidelisBackground {
-        Box(Modifier.fillMaxSize()) {
-            art?.let {
-                Image(it.asImageBitmap(), null, Modifier.fillMaxSize().blur(80.dp).alpha(0.5f),
-                    contentScale = ContentScale.Crop)
-                Box(Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(Fidelis.bg0.copy(alpha = 0.3f), Fidelis.bg0.copy(alpha = 0.92f)))
-                ))
+    // ---- Swipe down to close ----
+    var dragY by remember { mutableFloatStateOf(0f) }
+    var closing by remember { mutableStateOf(false) }
+    val currentOnBack by rememberUpdatedState(onBack)
+    val closeAt = with(LocalDensity.current) { 140.dp.toPx() }
+    val close = { if (!closing) { closing = true; currentOnBack() } }
+    val sheet = remember(closeAt) {
+        object : NestedScrollConnection {
+            // Pushing back up while dragged: shrink the drag before the list scrolls.
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (dragY > 0f && available.y < 0f) {
+                    val before = dragY
+                    dragY = (dragY + available.y).coerceAtLeast(0f)
+                    return Offset(0f, dragY - before)
+                }
+                return Offset.Zero
             }
+            // Pulling down with the list already at the top: drag the whole screen.
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y > 0f && source == NestedScrollSource.Drag) {
+                    dragY += available.y * 0.7f
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (dragY <= 0f) return Velocity.Zero
+                if (dragY > closeAt || available.y > 2000f) {
+                    close()
+                } else {
+                    animate(dragY, 0f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { v, _ -> dragY = v }
+                }
+                return available
+            }
+        }
+    }
 
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
-                item {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-                        Row(Modifier.fillMaxWidth().padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            IconCircle(Icons.Rounded.KeyboardArrowDown, "Collapse", onClick = onBack)
-                            Text("NOW PLAYING", color = Fidelis.inkMute, style = MaterialTheme.typography.labelMedium,
-                                modifier = Modifier.weight(1f).padding(end = 40.dp),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        }
+    Box(
+        Modifier.fillMaxSize()
+            .graphicsLayer {
+                translationY = dragY
+                alpha = 1f - (dragY / size.height).coerceIn(0f, 1f) * 0.4f
+                clip = dragY > 0f
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            }
+            .nestedScroll(sheet),
+    ) {
+        FidelisBackground {
+            Box(Modifier.fillMaxSize()) {
+                art?.let {
+                    Image(it.asImageBitmap(), null, Modifier.fillMaxSize().blur(80.dp).alpha(0.5f),
+                        contentScale = ContentScale.Crop)
+                    Box(Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(listOf(Fidelis.bg0.copy(alpha = 0.3f), Fidelis.bg0.copy(alpha = 0.92f)))
+                    ))
+                }
 
-                        Spacer(Modifier.height(28.dp))
-                        val shape = RoundedCornerShape(28.dp)
-                        Box(Modifier.fillMaxWidth().aspectRatio(1f).shadow(36.dp, shape).clip(shape).background(Fidelis.glass)) {
-                            art?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-                        }
-
-                        Spacer(Modifier.height(28.dp))
-                        Text(snap?.title?.ifBlank { null } ?: "Nothing playing", color = Fidelis.ink,
-                            style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(snap?.artist ?: "", color = Fidelis.inkMute, style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-
-                        Spacer(Modifier.height(16.dp))
-                        Slider(
-                            value = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
-                            onValueChange = { scrubbing = true; position = (it * duration).toLong() },
-                            onValueChangeFinished = { vm.seekTo(position); scrubbing = false },
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color.White, activeTrackColor = Fidelis.violet,
-                                inactiveTrackColor = Fidelis.glassStrong,
-                            ),
-                        )
-                        Row(Modifier.fillMaxWidth()) {
-                            Text(fmt(position), color = Fidelis.inkMute, style = MaterialTheme.typography.labelSmall)
-                            Spacer(Modifier.weight(1f))
-                            Text(fmt(duration), color = Fidelis.inkMute, style = MaterialTheme.typography.labelSmall)
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement. SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically) {
-                            IconCircle(Icons.Rounded.SkipPrevious, "Previous", onClick = vm::prev, size = 56.dp)
-                            IconCircle(
-                                if (snap?.isPaused == false) Icons.Rounded.Pause else Icons. Rounded.PlayArrow,
-                                if (snap?.isPaused == false) "Pause" else "Play",
-                                onClick = vm::togglePlay, size = 80.dp, filled = true,
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
+                    item {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                            Box(
+                                Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp)
+                                    .size(width = 36.dp, height = 4.dp).clip(CircleShape).background(Fidelis.inkFaint)
                             )
-                            IconCircle(Icons.Rounded.SkipNext, "Next", onClick = vm::next, size = 56.dp)
-                        }
+                            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                IconCircle(Icons.Rounded.KeyboardArrowDown, "Collapse", onClick = { close() })
+                                Text("NOW PLAYING", color = Fidelis.inkMute, style = MaterialTheme.typography.labelMedium,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.weight(1f).padding(end = 40.dp))
+                            }
 
-                        Row(Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Text("UP NEXT", color = Fidelis.inkMute, style = MaterialTheme.typography.labelMedium,
-                                modifier = Modifier.weight(1f))
-                            if (queue.isNotEmpty()) {
-                                FidelisChip("Reshuffle", selected = false, onClick = vm::reshuffle)
+                            Spacer(Modifier.height(28.dp))
+                            val shape = RoundedCornerShape(28.dp)
+                            Box(Modifier.fillMaxWidth().aspectRatio(1f).shadow(36.dp, shape).clip(shape).background(Fidelis.glass)) {
+                                art?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+                            }
+
+                            Spacer(Modifier.height(28.dp))
+                            Text(snap?.title?.ifBlank { null } ?: "Nothing playing", color = Fidelis.ink,
+                                style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(snap?.artist ?: "", color = Fidelis.inkMute, style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+
+                            Spacer(Modifier.height(16.dp))
+                            Slider(
+                                value = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
+                                onValueChange = { scrubbing = true; position = (it * duration).toLong() },
+                                onValueChangeFinished = { vm.seekTo(position); scrubbing = false },
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.White, activeTrackColor = Fidelis.violet,
+                                    inactiveTrackColor = Fidelis.glassStrong,
+                                ),
+                            )
+                            Row(Modifier.fillMaxWidth()) {
+                                Text(fmt(position), color = Fidelis.inkMute, style = MaterialTheme.typography.labelSmall)
+                                Spacer(Modifier.weight(1f))
+                                Text(fmt(duration), color = Fidelis.inkMute, style = MaterialTheme.typography.labelSmall)
+                            }
+
+                            Spacer(Modifier.height(12.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically) {
+                                IconCircle(Icons.Rounded.SkipPrevious, "Previous", onClick = vm::prev, size = 56.dp)
+                                IconCircle(
+                                    if (snap?.isPaused == false) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                    if (snap?.isPaused == false) "Pause" else "Play",
+                                    onClick = vm::togglePlay, size = 80.dp, filled = true,
+                                )
+                                IconCircle(Icons.Rounded.SkipNext, "Next", onClick = vm::next, size = 56.dp)
+                            }
+
+                            Row(Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Text("UP NEXT", color = Fidelis.inkMute, style = MaterialTheme.typography.labelMedium,
+                                    modifier = Modifier.weight(1f))
+                                if (queue.isNotEmpty()) {
+                                    FidelisChip("Reshuffle", selected = false, onClick = vm::reshuffle)
+                                }
                             }
                         }
                     }
-                }
 
-                if (upNext.isEmpty()) {
-                    item {
-                        Text(
-                            if (queue.isEmpty()) "Start a playlist or mood mix to see what's coming up."
-                            else "That's the end of this queue.",
-                            color = Fidelis.inkFaint, style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                        )
-                    }
-                } else {
-                    itemsIndexed(upNext, key = { i, q -> "$i-${q.uri}" }) { i, q ->
-                        TrackRow(
-                            title = q.title, subtitle = q.artist, index = i + 1,
-                            onClick = { vm.playAt(currentIndex + 1 + i) },
-                        )
+                    if (upNext.isEmpty()) {
+                        item {
+                            Text(
+                                if (queue.isEmpty()) "Start a playlist or mood mix to see what's coming up."
+                                else "That's the end of this queue.",
+                                color = Fidelis.inkFaint, style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                            )
+                        }
+                    } else {
+                        itemsIndexed(upNext, key = { i, q -> "$i-${q.uri}" }) { i, q ->
+                            TrackRow(
+                                title = q.title, subtitle = q.artist, index = i + 1,
+                                onClick = { vm.playAt(currentIndex + 1 + i) },
+                            )
+                        }
                     }
                 }
             }
