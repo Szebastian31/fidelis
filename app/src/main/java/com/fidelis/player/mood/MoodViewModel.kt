@@ -13,7 +13,6 @@ import com.fidelis.player.mood.MoodRepository
 import com.fidelis.player.mood.MoodTrack
 import com.fidelis.player.mood.Suggestion
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -23,13 +22,14 @@ class MoodViewModel @Inject constructor(
     private val moodRepo: MoodRepository,
     private val remote: SpotifyRemote,
 ) : ViewModel() {
-
-    val connected: StateFlow<Boolean> = repo.connected
-    val nowPlaying: StateFlow<SpotifyRemote. Snapshot?> = remote.state
+    val connected = repo.connected
+    val nowPlaying = remote.state
+    val artwork = remote.artwork
     val suggestions: List<Suggestion> = Suggestion.presets
 
-    var playlists by mutableStateOf<List<SpotifyPlaylist>>(emptyList()); private set
+    var playlists by mutableStateOf(repo.cachedPlaylists()); private set
     var selected by mutableStateOf<SpotifyPlaylist?>(null); private set
+    var selectedMood by mutableStateOf<Mood?>(null); private set
     var building by mutableStateOf(false); private set
     var mixTitle by mutableStateOf<String?>(null); private set
     var result by mutableStateOf<List<MoodTrack>>(emptyList()); private set
@@ -47,13 +47,13 @@ class MoodViewModel @Inject constructor(
     fun runSuggestion(s: Suggestion) {
         if (building) return
         viewModelScope.launch {
-            building = true; mixTitle = s.title; note = null
+            building = true; mixTitle = s.title; note = null; selectedMood = null
             result = when (s) {
                 is Suggestion.OnRepeat -> moodRepo.topMix()
                 is Suggestion.MoodMix -> moodRepo.moodFromTop(s.mood)
             }
             note = if (result.isEmpty())
-                "Nothing came back — check your Last.fm keys and that Spotify has enough listening history." else null
+                "Nothing came back. Check your Last.fm keys and that Spotify has enough listening history." else null
             building = false
         }
     }
@@ -62,14 +62,15 @@ class MoodViewModel @Inject constructor(
         val p = selected ?: return
         if (building) return
         viewModelScope.launch {
-            building = true; mixTitle = "${mood.label} · ${p.name}"; note = null
+            building = true; selectedMood = mood; mixTitle = "${mood.label} · ${p.name}"; note = null
             result = moodRepo.build(p.id, mood)
             note = if (result.isEmpty())
-                "No ${mood.label.lowercase()} matches in this playlist — try another mood or playlist." else null
+                "No ${mood.label.lowercase()} songs found here. Spotify only shares songs from playlists you created, so try one of yours." else null
             building = false
         }
     }
 
     fun play() { if (result.isNotEmpty()) moodRepo.play(result) }
+    fun togglePlay() { if (nowPlaying.value?.isPaused == true) remote.resume() else remote.pause() }
     fun authUrl(): String = repo.authUrl()
 }
