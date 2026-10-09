@@ -15,6 +15,7 @@ import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,6 +35,8 @@ data class PlaylistTrack(
     val artist: String,
     val imageUrl: String? = null,
 )
+
+fun PlaylistTrack.toQueue() = QueueTrack(uri, title, artist, imageUrl)
 
 @Singleton
 class SpotifyRepository @Inject constructor(
@@ -109,7 +112,7 @@ class SpotifyRepository @Inject constructor(
         // Another request may have refreshed while we waited.
         tokenStore.spotifyAccessToken?.let { if (it != expired) return it }
         val refresh = tokenStore.spotifyRefreshToken ?: run { signOut(); return null }
-        val body = FormBody.Builder()
+        val body = FormBody. Builder()
             .add("grant_type", "refresh_token")
             .add("refresh_token", refresh)
             .add("client_id", clientId).build()
@@ -203,6 +206,11 @@ class SpotifyRepository @Inject constructor(
         out.take(max)
     }
 
+    /** How many Liked Songs you have (one tiny request). */
+    suspend fun fetchLikedCount(): Int = withContext(Dispatchers.IO) {
+        getJson("https://api.spotify.com/v1/me/tracks?limit=1")?.optInt("total") ?: 0
+    }
+
     /** Your last 50 plays, most recent first, without repeats. Needs user-read-recently-played. */
     suspend fun fetchRecentlyPlayed(): List<PlaylistTrack> = withContext(Dispatchers.IO) {
         val items = getJson("https://api.spotify.com/v1/me/player/recently-played?limit=50")
@@ -225,6 +233,28 @@ class SpotifyRepository @Inject constructor(
                 for (i in 0 until items.length()) items.optJSONObject(i)?.toPlaylistTrack()?.let { add(it) }
             }
         }
+
+    // ---------- Search ----------
+
+    /** Song search, 10 per page (works with Spotify's tighter 2026 limits). */
+    suspend fun searchTracks(query: String, offset: Int = 0, limit: Int = SEARCH_PAGE): List<PlaylistTrack> =
+        withContext(Dispatchers.IO) {
+            if (query.isBlank()) return@withContext emptyList()
+            val q = URLEncoder.encode(query.trim(), "UTF-8")
+            val items = getJson("https://api.spotify.com/v1/search?type=track&limit=$limit&offset=$offset&q=$q")
+                ?.optJSONObject("tracks")?.optJSONArray("items") ?: return@withContext emptyList()
+            buildList {
+                for (i in 0 until items.length()) items.optJSONObject(i)?.toPlaylistTrack()?.let { add(it) }
+            }
+        }
+
+    /** Finds the Spotify version of a song by artist + title (used for new recommendations). */
+    suspend fun findTrack(artist: String, title: String): PlaylistTrack? {
+        val strict = searchTracks("track:\"$title\" artist:\"$artist\"", limit = 3)
+        val pick = strict.firstOrNull { it.artist.equals(artist, ignoreCase = true) } ?: strict.firstOrNull()
+        return pick ?: searchTracks("$artist $title", limit = 3)
+            .firstOrNull { it.artist.equals(artist, ignoreCase = true) }
+    }
 
     suspend fun importLibrary(onProgress: (Int) -> Unit = {}): ImportResult = withContext(Dispatchers.IO) {
         val tracks = ArrayList<SpotifyTrack>()
@@ -249,8 +279,9 @@ class SpotifyRepository @Inject constructor(
         ImportResult(tracks.size, matched, tracks.size - matched)
     }
 
-    private companion object {
-        const val TOKEN_URL = "https://accounts.spotify.com/api/token"
+    companion object {
+        private const val TOKEN_URL = "https://accounts.spotify.com/api/token"
+        const val SEARCH_PAGE = 10
     }
 }
 
@@ -263,7 +294,7 @@ private fun JSONObject.toPlaylistTrack(): PlaylistTrack? {
     val uri = optString("uri")
     if (!uri.startsWith("spotify:track:")) return null
     val images = optJSONObject("album")?.optJSONArray("images")
-    // Smallest image (last) is plenty for 44dp row thumbnails.
+    // Smallest image (last) is plenty for row thumbnails.
     val img = if (images != null && images.length() > 0)
         images.optJSONObject(images.length() - 1)?.optString("url") else null
     return PlaylistTrack(uri, optString("name"), firstArtist(), img?.ifBlank { null })
