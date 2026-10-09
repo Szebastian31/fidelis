@@ -1,11 +1,12 @@
 package com.fidelis.player.mood
 
+import com.fidelis.player.integration.lastfm.LastfmApiImpl
 import com.fidelis.player.integration.lastfm.LastfmRepository
 import com.fidelis.player.integration.spotify.PlaylistTrack
 import com.fidelis.player.integration.spotify.QueueTrack
 import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.SpotifyRepository
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines. Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -65,6 +66,7 @@ data class MoodTrack(
     val score: Int,
     val matched: List<String>,
     val imageUrl: String? = null,
+    val isNew: Boolean = false, // a discovery: not in your library
 )
 
 data class MixProgress(val phase: String, val done: Int, val total: Int)
@@ -88,10 +90,24 @@ sealed class Suggestion(val title: String, val subtitle: String) {
     }
 }
 
+/** Mixes that blend your songs with new ones. [mood] null = no mood filter. */
+data class DiscoverPreset(val mood: Mood?, val title: String, val subtitle: String) {
+    companion object {
+        val presets = listOf(
+            DiscoverPreset(null, "Fresh finds", "Your favourites + new songs like them"),
+            DiscoverPreset(Mood.CHILL, "Chill discoveries", "Mellow, with new artists mixed in"),
+            DiscoverPreset(Mood.ENERGETIC, "New energy", "Upbeat songs you haven't heard yet"),
+            DiscoverPreset(Mood.PARTY, "Party, expanded", "Your dance picks + fresh ones"),
+            DiscoverPreset(Mood.MELANCHOLY, "Late-night discoveries", "Moody, with new finds"),
+        )
+    }
+}
+
 @Singleton
 class MoodRepository @Inject constructor(
     private val spotify: SpotifyRepository,
     private val lastfm: LastfmRepository,
+    private val lastfmApi: LastfmApiImpl,
     private val remote: SpotifyRemote,
     private val cache: TagCache,
 ) {
@@ -124,8 +140,75 @@ class MoodRepository @Inject constructor(
         }
     }
 
-    fun play(tracks: List<MoodTrack>) =
-        remote.playQueue(tracks.map { QueueTrack(it.uri, it.title, it.artist) })
+    /**
+     * Your songs blended with new ones. [base] = songs to start from (a playlist);
+     * null uses your whole library. About 2 of yours for every new song.
+     */
+    suspend fun discover(mood: Mood?, base: List<PlaylistTrack>? = null, limit: Int = 36): List<MoodTrack> =
+        withContext(Dispatchers.IO) {
+            val library = tracksFor(Source.EVERYTHING)
+            val pool = base ?: library
+            if (pool.isEmpty()) return@withContext emptyList()
+            val known = (library + pool).map { key(it.artist, it.title) }.toHashSet()
+            val knownUris = (library + pool).map { it.uri }.toHashSet()
+            val ownTarget = limit * 2 / 3
+
+            // 1) Your songs that fit.
+            val own = if (mood != null) scoreTracks(pool, mood, ownTarget)
+                      else pool.shuffled().capPerArtist(2) { it.artist }.take(ownTarget).map { it.toMood() }
+            if (own.isEmpty()) return@withContext emptyList()
+
+            try {
+                // 2) Songs similar to your strongest picks, ranked by how many seeds suggest them.
+                val seeds = own.take(10)
+                val similar = fetchAll("Finding new songs", seeds) { s ->
+                    lastfmApi.getSimilar(s.artist, cleanTitle(s.title), 25)
+                }
+                val counts = HashMap<String, Pair<Pair<String, String>, Int>>()
+                similar.values.flatten().forEach { (a, t) ->
+                    val k = key(a, t)
+                    if (k in known) return@forEach
+                    val prev = counts[k]
+                    counts[k] = (a to t) to ((prev?.second ?: 0) + 1)
+                }
+                var candidates = counts.values.sortedByDescending { it.second }.map { it.first }
+                    .distinctBy { it.first.lowercase() } // one song per new artist
+                    .take(limit)
+
+                // 3) Keep candidates whose artist fits the mood.
+                if (mood != null) {
+                    val tags = fetchAll("Checking the mood", candidates.map { it.first }.distinct()) { artistTags(it) }
+                    candidates = candidates.filter { score(tags[it.first].orEmpty(), mood) > 0 }
+                }
+
+                // 4) Find them on Spotify.
+                val need = limit - own.size
+                val found = fetchAll("Matching on Spotify", candidates.take(need + 6), permits = 3) { (a, t) ->
+                    listOfNotNull(spotify.findTrack(a, t)?.let { "${it.uri}\u0001${it.title}\u0001${it.artist}\u0001${it.imageUrl.orEmpty()}" })
+                }
+                val fresh = candidates.mapNotNull { found[it]?.firstOrNull() }
+                    .map { it.split("\u0001") }
+                    .filter { it[0] !in knownUris }
+                    .distinctBy { it[0] }
+                    .take(need)
+                    .map { MoodTrack(it[0], it[1], it[2], 0, listOf("new for you"), it[3].ifBlank { null }, isNew = true) }
+
+                // 5) Blend: two of yours, then one new.
+                val out = ArrayList<MoodTrack>()
+                var i = 0; var j = 0
+                while (out.size < limit && (i < own.size || j < fresh.size)) {
+                    repeat(2) { if (i < own.size) out += own[i++] }
+                    if (j < fresh.size) out += fresh[j++]
+                }
+                out
+            } finally {
+                cache.save()
+                _progress.value = null
+            }
+        }
+
+    fun play(tracks: List<MoodTrack>, startIndex: Int = 0) =
+        remote.playQueue(tracks.map { it.toQueue() }, startIndex)
 
     private suspend fun tracksFor(source: Source): List<PlaylistTrack> = when (source) {
         Source.LIKED -> spotify.fetchLikedTracks(300)
@@ -208,19 +291,19 @@ class MoodRepository @Inject constructor(
         return ordered
     }
 
-    /** Looks up tags 4 at a time (polite to Last.fm) and reports progress. */
+    /** Runs [fetch] a few at a time (polite to Last.fm/Spotify) and reports progress. */
     private suspend fun <K> fetchAll(
-        phase: String, keys: List<K>, fetch: suspend (K) -> List<String>,
+        phase: String, keys: List<K>, permits: Int = 4, fetch: suspend (K) -> List<String>,
     ): Map<K, List<String>> = coroutineScope {
-        val sem = Semaphore(4)
+        val sem = Semaphore(permits)
         val done = AtomicInteger()
         _progress.value = MixProgress(phase, 0, keys.size)
         keys.map { k ->
             async {
-                val tags = sem.withPermit { fetch(k) }
+                val r = sem.withPermit { runCatching { fetch(k) }.getOrDefault(emptyList()) }
                 val n = done.incrementAndGet()
                 _progress.update { it?.copy(done = n) }
-                k to tags
+                k to r
             }
         }.awaitAll().toMap()
     }
@@ -238,6 +321,9 @@ class MoodRepository @Inject constructor(
         return tags.ifEmpty { artistTags(artist) }
     }
 
+    private fun key(artist: String, title: String) =
+        "${artist.lowercase().trim()}|${cleanTitle(title).lowercase().trim()}"
+
     // "Song - Remastered 2011" / "Song (feat. X)" → "Song". Remixes are kept: they tag differently.
     private fun cleanTitle(t: String): String = t.replace(
         Regex("""\s*[-–(\[]\s*(\d{4}\s*)?(remaster(ed)?|radio edit|feat\.|ft\.|mono|stereo|single version).*$""",
@@ -246,6 +332,7 @@ class MoodRepository @Inject constructor(
 }
 
 private fun PlaylistTrack.toMood() = MoodTrack(uri, title, artist, 0, emptyList(), imageUrl)
+fun MoodTrack.toQueue() = QueueTrack(uri, title, artist, imageUrl)
 
 private fun <T> List<T>.capPerArtist(max: Int, artist: (T) -> String): List<T> {
     val seen = HashMap<String, Int>()
