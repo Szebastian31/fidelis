@@ -7,10 +7,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fidelis.player.integration.spotify.PlaylistTrack
-import com.fidelis.player.integration.spotify.QueueTrack
 import com.fidelis.player.integration.spotify.SpotifyPlaylist
 import com.fidelis.player.integration.spotify.SpotifyRemote
-import com.fidelis.player.integration.spotify. SpotifyRepository
+import com.fidelis.player.integration.spotify.SpotifyRepository
+import com.fidelis.player.integration.spotify.toQueue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -22,7 +22,11 @@ class PlaylistDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private val playlistId: String = savedStateHandle["playlistId"] ?: ""
-    val playlist: SpotifyPlaylist? = repo.cachedPlaylist(playlistId)
+    val isLiked = playlistId == LIKED_PLAYLIST_ID
+
+    val playlist: SpotifyPlaylist? =
+        if (isLiked) SpotifyPlaylist(LIKED_PLAYLIST_ID, "Liked Songs", null, 0, "")
+        else repo.cachedPlaylist(playlistId)
     val nowPlaying = remote.state
 
     var loading by mutableStateOf(true); private set
@@ -31,16 +35,20 @@ class PlaylistDetailViewModel @Inject constructor(
     init { load() }
 
     fun load() {
-        viewModelScope.launch { loading = true; tracks = repo.fetchPlaylistTracks(playlistId); loading = false }
+        viewModelScope.launch {
+            loading = true
+            tracks = if (isLiked) repo.fetchLikedTracks(1000) else repo.fetchPlaylistTracks(playlistId)
+            loading = false
+        }
     }
 
-    fun playFrom(index: Int) =
-        remote.playQueue(tracks.map { QueueTrack(it.uri, it.title, it.artist) }, index)
+    fun playFrom(index: Int) = remote.playQueue(tracks.map { it.toQueue() }, index)
+    fun shuffle() { if (tracks.isNotEmpty()) remote.playQueue(tracks.shuffled().map { it.toQueue() }, 0) }
 
-    fun shuffle() {
-        if (tracks.isNotEmpty()) remote.playQueue(tracks.shuffled().map { QueueTrack(it.uri, it.title, it.artist) }, 0)
-    }
+    fun playNext(t: PlaylistTrack) = remote.playNext(listOf(t.toQueue()))
+    fun addToQueue(t: PlaylistTrack) = remote.addToQueue(listOf(t.toQueue()))
+    fun addAllToQueue() = remote.addToQueue(tracks.map { it.toQueue() })
 
     /** For playlists Spotify won't list (not owned by you): play the whole thing in Spotify. */
-    fun playInSpotify() = remote.playContext(playlist?.uri ?: "spotify:playlist:$playlistId")
+    fun playInSpotify() = remote.playContext(playlist?.uri?.ifBlank { null } ?: "spotify:playlist:$playlistId")
 }
