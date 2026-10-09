@@ -2,144 +2,190 @@ package com.fidelis.player.ui.mood
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.*
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape. RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.fidelis.player.mood.Mood
-import com.fidelis.player.mood.MoodTrack
 import com.fidelis.player.mood.Suggestion
-import com.fidelis.player.ui.theme.Fidelis
-import com.fidelis.player.ui.theme.FidelisBackground
-import com.fidelis.player.ui.theme.GlassCard
+import com.fidelis.player.ui.theme.*
 
 @Composable
 fun MoodScreen(onOpenPlayer: () -> Unit, vm: MoodViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val connected by vm.connected.collectAsState()
-    val now by vm.nowPlaying.collectAsState()
+    val snap by vm.nowPlaying.collectAsState()
+    val art by vm.artwork.collectAsState()
+    val playing = snap?.takeIf { it.title.isNotBlank() }
+
     LaunchedEffect(connected) { if (connected && vm.playlists.isEmpty()) vm.load() }
 
     FidelisBackground {
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Text("Mood", color = Fidelis.ink, style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.height(12.dp))
-
-            if (!connected) {
-                GlassCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(20.dp)) {
-                        Text("Connect Spotify to build mood mixes.", color = Fidelis.inkSoft)
-                        Spacer(Modifier.height(12.dp))
-                        Button(onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.authUrl())))
-                        }) { Text("Connect Spotify") }
+        Box(Modifier.fillMaxSize()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = if (playing != null) 100.dp else 24.dp),
+            ) {
+                item {
+                    Box(Modifier.padding(horizontal = 20.dp)) {
+                        ScreenHeader(title = "Mood", eyebrow = "Mixes for right now")
                     }
                 }
-                return@Column
-            }
 
-            Text("SUGGESTED", color = Fidelis.inkMute, style = MaterialTheme.typography.labelSmall)
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.padding(vertical = 8.dp),
-            ) { items(vm.suggestions) { s -> SuggestionCard(s) { vm.runSuggestion(s) } } }
-
-            Text("BUILD YOUR OWN", color = Fidelis.inkMute, style = MaterialTheme.typography.labelSmall)
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
-                vm.playlists.forEach { p ->
-                    FilterChip(
-                        selected = vm.selected?.id == p.id, onClick = { vm.select(p) },
-                        label = { Text(p.name, maxLines = 1) }, modifier = Modifier.padding(end = 8.dp),
-                    )
+                if (!connected) {
+                    item {
+                        EmptyState(
+                            title = "Connect Spotify",
+                            body = "Mood mixes are built from your own playlists and listening history.",
+                            actionLabel = "Connect Spotify",
+                            onAction = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.authUrl()))) },
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                        )
+                    }
+                    return@LazyColumn
                 }
-            }
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp)) {
-                Mood.entries.forEach { m ->
-                    FilterChip(
-                        selected = false, onClick = { vm.generate(m) },
-                        label = { Text(m.label) }, modifier = Modifier.padding(end = 8.dp),
-                    )
-                }
-            }
 
-            if (vm.building) {
-                LinearProgressIndicator(Modifier.fillMaxWidth(), color = Fidelis.violet)
-                Text("Reading tags… first build of a source takes a few seconds.",
-                    color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall)
-            }
-            vm.note?.let { Text(it, color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium) }
-
-            if (vm.result.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = { vm.play(); onOpenPlayer() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Play ${vm.result.size}-track mix")
-                }
-                vm.mixTitle?.let {
-                    Text(it, color = Fidelis.inkSoft, style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(top = 6.dp))
-                }
-                Spacer(Modifier.height(8.dp))
-                LazyColumn(Modifier.weight(1f)) { items(vm.result) { t -> MoodRow(t) } }
-            } else {
-                Spacer(Modifier.weight(1f))
-            }
-
-            now?.let {
-                GlassCard(Modifier.fillMaxWidth().padding(top = 8.dp).clickable { onOpenPlayer() }) {
-                    Row(Modifier.padding(14.dp)) {
-                        Column(Modifier.weight(1f)) {
-                            Text(it.title.ifBlank { "—" }, color = Fidelis.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(it.artist, color = Fidelis.inkMute, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.bodySmall)
+                item { SectionLabel("Suggested", Modifier.padding(horizontal = 20.dp)) }
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        itemsIndexed(vm.suggestions) { i, s ->
+                            SuggestionCard(s, i, selected = vm.mixTitle == s.title) { vm.runSuggestion(s) }
                         }
-                        Text("Open ›", color = Fidelis.violet, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+
+                item { SectionLabel("Build your own", Modifier.padding(horizontal = 20.dp)) }
+                item {
+                    Text("From playlist", color = Fidelis.inkFaint, style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(start = 20.dp, bottom = 8.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(vm.playlists, key = { it.id }) { p ->
+                            FidelisChip(p.name, vm.selected?.id == p.id, { vm.select(p) },
+                                Modifier.widthIn(max = 180.dp))
+                        }
+                    }
+                    Text("Mood", color = Fidelis.inkFaint, style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(Mood.entries) { m -> FidelisChip(m.label, vm.selectedMood == m, { vm.generate(m) }) }
+                    }
+                }
+
+                if (vm.building) {
+                    item {
+                        Column(Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
+                            LinearProgressIndicator(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(50)),
+                                color = Fidelis.violet, trackColor = Fidelis.glass,
+                            )
+                            Text("Reading the mood of each song… the first build takes a few seconds.",
+                                color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
+                }
+
+                vm.note?.let {
+                    item {
+                        EmptyState(title = "No mix yet", body = it,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp))
+                    }
+                }
+
+                if (vm.result.isNotEmpty() && !vm.building) {
+                    item {
+                        Row(
+                            Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(vm.mixTitle ?: "Your mix", color = Fidelis.ink,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("${vm.result.size} songs · ordered to flow", color = Fidelis.inkMute,
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            GradientButton("Play", { vm.play(); onOpenPlayer() }, icon = Icons.Rounded.PlayArrow)
+                        }
+                    }
+                    itemsIndexed(vm.result, key = { i, t -> "$i-${t.uri}" }) { i, t ->
+                        TrackRow(
+                            title = t.title,
+                            subtitle = if (t.matched.isNotEmpty()) "${t.artist} · ${t.matched.take(2).joinToString(", ")}" else t.artist,
+                            index = i + 1,
+                            highlighted = t.uri == snap?.uri,
+                            onClick = { vm.play(); onOpenPlayer() },
+                        )
                     }
                 }
             }
-        }
-    }
-}
 
-@Composable
-private fun SuggestionCard(s: Suggestion, onClick: () -> Unit) {
-    GlassCard(Modifier.width(190.dp).clickable(onClick = onClick)) {
-        Column(Modifier.padding(16.dp)) {
-            Text(s.title, color = Fidelis.ink, style = MaterialTheme.typography.titleMedium,
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(6.dp))
-            Text(s.subtitle, color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-@Composable
-private fun MoodRow(t: MoodTrack) {
-    GlassCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Row(Modifier.padding(12.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text(t.title, color = Fidelis.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(t.artist, color = Fidelis.inkMute, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall)
-                if (t.matched.isNotEmpty()) {
-                    Text(t.matched.joinToString(" · "), color = Fidelis.violet,
-                        style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+            playing?.let {
+                MiniPlayer(
+                    snap = it, art = art, onOpen = onOpenPlayer, onToggle = vm::togglePlay,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp, vertical = 10.dp),
+                )
             }
-            if (t.score > 0) Text("${t.score}", color = Fidelis.pink, style = MaterialTheme.typography.titleMedium)
         }
+    }
+}
+
+private val cardGradients = listOf(
+    listOf(Color(0xFF8B5CC7), Color(0xFFE4657F)),
+    listOf(Color(0xFF3A6FD8), Color(0xFF7CC4F5)),
+    listOf(Color(0xFFFF9E5A), Color(0xFFE4657F)),
+    listOf(Color(0xFF2E9C8F), Color(0xFF7CC4F5)),
+    listOf(Color(0xFF5B3FC4), Color(0xFFB49CFF)),
+)
+
+@Composable
+private fun SuggestionCard(s: Suggestion, index: Int, selected: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(22.dp)
+    Column(
+        Modifier.width(160.dp).height(170.dp).clip(shape)
+            .background(Brush.linearGradient(cardGradients[index % cardGradients.size]))
+            .then(if (selected) Modifier.background(Color.White.copy(alpha = 0.12f)) else Modifier)
+            .pressable(onClick = onClick).padding(16.dp),
+    ) {
+        Icon(Icons.Rounded.AutoAwesome, null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(22.dp))
+        Spacer(Modifier.weight(1f))
+        Text(s.title, color = Color.White, style = MaterialTheme.typography.titleMedium,
+            maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(4.dp))
+        Text(s.subtitle, color = Color.White.copy(alpha = 0.78f), style = MaterialTheme.typography.bodySmall,
+            maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
