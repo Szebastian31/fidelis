@@ -4,11 +4,11 @@ import com.fidelis.player.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
-import okhttp3.HttpUrl. Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
-import java.security.MessageDigest
+import java.security. MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,6 +34,23 @@ class LastfmApiImpl @Inject constructor() : LastfmApi {
                 }
             }.getOrNull()
         }
+
+    /** Tells Last.fm what's playing right now (shows on your profile). */
+    suspend fun updateNowPlaying(sk: String, artist: String, track: String, durationSec: Long): Boolean {
+        val p = mutableMapOf(
+            "method" to "track.updateNowPlaying", "artist" to artist, "track" to track,
+            "sk" to sk, "api_key" to apiKey,
+        )
+        if (durationSec > 0) p["duration"] = durationSec.toString()
+        return post(signed(p))
+    }
+
+    /** Logs a finished play. [timestampSec] is when the song started (UTC seconds). */
+    suspend fun scrobble(sk: String, artist: String, track: String, timestampSec: Long): Boolean =
+        post(signed(mutableMapOf(
+            "method" to "track.scrobble", "artist" to artist, "track" to track,
+            "timestamp" to timestampSec.toString(), "sk" to sk, "api_key" to apiKey,
+        )))
 
     override suspend fun post(params: Map<String, String>): Boolean =
         withContext(Dispatchers.IO) {
