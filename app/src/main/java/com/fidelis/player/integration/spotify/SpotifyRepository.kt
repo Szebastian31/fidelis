@@ -16,7 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import javax.inject.Inject
-import javax.inject. Singleton
+import javax.inject.Singleton
 
 data class ImportResult(val total: Int, val matched: Int, val gaps: Int)
 
@@ -28,8 +28,12 @@ data class SpotifyPlaylist(
     val uri: String,
 )
 
-// 1. NEW: used by the mood builder (needs the artist for tag lookup)
-data class PlaylistTrack(val uri: String, val title: String, val artist: String)
+data class PlaylistTrack(
+    val uri: String,
+    val title: String,
+    val artist: String,
+    val imageUrl: String? = null,
+)
 
 @Singleton
 class SpotifyRepository @Inject constructor(
@@ -41,9 +45,15 @@ class SpotifyRepository @Inject constructor(
     private val client = OkHttpClient()
     private val clientId = BuildConfig.SPOTIFY_CLIENT_ID
     private val redirectUri = "fidelis://auth"
+    private val refreshLock = Any()
 
     private val _connected = MutableStateFlow(tokenStore.spotifyAccessToken != null)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
+
+    // Last good playlist list, so a flaky network never blanks the grid.
+    @Volatile private var cache: List<SpotifyPlaylist> = emptyList()
+    fun cachedPlaylists(): List<SpotifyPlaylist> = cache
+    fun cachedPlaylist(id: String): SpotifyPlaylist? = cache.firstOrNull { it.id == id }
 
     fun authUrl(): String {
         val pkce = SpotifyPkce(clientId, redirectUri)
@@ -57,7 +67,7 @@ class SpotifyRepository @Inject constructor(
             .add("grant_type", "authorization_code").add("code", code)
             .add("redirect_uri", redirectUri).add("client_id", clientId)
             .add("code_verifier", verifier).build()
-        val req = Request.Builder().url("https://accounts.spotify.com/api/token").post(body).build()
+        val req = Request.Builder().url(TOKEN_URL).post(body).build()
         runCatching {
             client.newCall(req).execute().use { resp ->
                 val json = JSONObject(resp.body?.string().orEmpty())
@@ -74,115 +84,130 @@ class SpotifyRepository @Inject constructor(
     fun disconnect() {
         tokenStore.spotifyAccessToken = null
         tokenStore.spotifyRefreshToken = null
+        cache = emptyList()
         _connected.value = false
     }
 
-    /** The user's playlists (paginated), for the Playlists tab. */
-    suspend fun fetchPlaylists(): List<SpotifyPlaylist> = withContext(Dispatchers. IO) {
-        val token = tokenStore.spotifyAccessToken ?: return@withContext emptyList()
+    // ---------- HTTP with automatic token refresh ----------
+
+    private fun authed(url: String, token: String) =
+        Request.Builder().url(url).header("Authorization", "Bearer $token").build()
+
+    /** GET that transparently refreshes the 1-hour access token on 401. Null on failure. */
+    private fun getJson(url: String): JSONObject? = runCatching {
+        val token = tokenStore.spotifyAccessToken ?: return null
+        val first = client.newCall(authed(url, token)).execute()
+        val resp = if (first.code == 401) {
+            first.close()
+            val fresh = refreshAccessToken(token) ?: return null
+            client.newCall(authed(url, fresh)).execute()
+        } else first
+        resp.use { if (it.isSuccessful) JSONObject(it.body?.string().orEmpty()) else null }
+    }.getOrNull()
+
+    private fun refreshAccessToken(expired: String): String? = synchronized(refreshLock) {
+        // Another request may have refreshed while we waited.
+        tokenStore.spotifyAccessToken?.let { if (it != expired) return it }
+        val refresh = tokenStore.spotifyRefreshToken ?: run { signOut(); return null }
+        val body = FormBody.Builder()
+            .add("grant_type", "refresh_token")
+            .add("refresh_token", refresh)
+            .add("client_id", clientId).build()
+        val json = runCatching {
+            client.newCall(Request.Builder().url(TOKEN_URL).post(body).build()).execute()
+                .use { JSONObject(it.body?.string().orEmpty()) }
+        }.getOrNull() ?: return null // network blip: stay signed in, try again later
+        val access = json.optString("access_token")
+        if (access.isBlank()) { signOut(); return null } // refresh revoked → show Connect again
+        tokenStore.spotifyAccessToken = access
+        json.optString("refresh_token").takeIf { it.isNotBlank() }?.let { tokenStore.spotifyRefreshToken = it }
+        access
+    }
+
+    private fun signOut() {
+        tokenStore.spotifyAccessToken = null
+        tokenStore.spotifyRefreshToken = null
+        _connected.value = false
+    }
+
+    /** Walks `next` links. Returns false if the very first page failed. */
+    private fun paged(start: String, maxPages: Int, onPage: (JSONObject) -> Unit): Boolean {
+        var url: String? = start
+        var pages = 0
+        while (url != null && pages < maxPages) {
+            val root = getJson(url)
+            if (root == null) return pages > 0
+            onPage(root)
+            url = root.optString("next").takeIf { it.isNotBlank() && it != "null" }
+            pages++
+        }
+        return true
+    }
+
+    // ---------- Library ----------
+
+    suspend fun fetchPlaylists(): List<SpotifyPlaylist> = withContext(Dispatchers.IO) {
+        if (tokenStore.spotifyAccessToken == null) return@withContext emptyList()
         val out = ArrayList<SpotifyPlaylist>()
-        var url: String? = "https://api.spotify.com/v1/me/playlists?limit=50"
-        var pages = 0
-        while (url != null && pages < 10) {
-            val req = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
-            url = client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@use null
-                val root = JSONObject(resp.body?.string().orEmpty())
-                val items = root.optJSONArray("items") ?: return@use null
-                for (i in 0 until items.length()) {
-                    val p = items.getJSONObject(i)
-                    val images = p.optJSONArray("images")
-                    val img = if (images != null && images.length() > 0)
-                        images.getJSONObject(0).optString("url") else null
-                    out += SpotifyPlaylist(
-                        id = p.optString("id"),
-                        name = p.optString("name"),
-                        imageUrl = img?.ifBlank { null },
-                        trackCount = p.optJSONObject("tracks")?.optInt("total") ?: 0,
-                        uri = p.optString("uri"),
-                    )
-                }
-                root.optString("next").takeIf { it.isNotBlank() && it != "null" }
+        val ok = paged("https://api.spotify.com/v1/me/playlists?limit=50", 10) { root ->
+            val items = root.optJSONArray("items") ?: return@paged
+            for (i in 0 until items.length()) {
+                val p = items.optJSONObject(i) ?: continue
+                val images = p.optJSONArray("images")
+                val img = if (images != null && images.length() > 0)
+                    images.optJSONObject(0)?.optString("url") else null
+                // Feb 2026: `tracks` was renamed to `items` on playlist objects.
+                val counts = p.optJSONObject("items") ?: p.optJSONObject("tracks")
+                out += SpotifyPlaylist(
+                    id = p.optString("id"),
+                    name = p.optString("name"),
+                    imageUrl = img?.ifBlank { null },
+                    trackCount = counts?.optInt("total") ?: 0,
+                    uri = p.optString("uri"),
+                )
             }
-            pages++
         }
+        if (!ok && out.isEmpty()) return@withContext cache
+        cache = out
         out
     }
 
-    // 2. REPLACES fetchPlaylistTrackUris: now returns uri + title + artist for the mood builder.
-    /** Tracks for one playlist (uri + title + artist). */
+    /**
+     * Songs in one playlist. Uses the new /items endpoint. Spotify only returns contents
+     * for playlists the user owns or collaborates on; others come back empty.
+     */
     suspend fun fetchPlaylistTracks(playlistId: String): List<PlaylistTrack> = withContext(Dispatchers.IO) {
-        val token = tokenStore.spotifyAccessToken ?: return@withContext emptyList()
         val out = ArrayList<PlaylistTrack>()
-        var url: String? = "https://api.spotify.com/v1/playlists/$playlistId/tracks?limit=100"
-        var pages = 0
-        while (url != null && pages < 10) {
-            val req = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
-            url = client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@use null
-                val root = JSONObject(resp.body?.string().orEmpty())
-                val items = root.optJSONArray("items") ?: return@use null
-                for (i in 0 until items.length()) {
-                    val t = items.getJSONObject(i).optJSONObject("track") ?: continue
-                    val uri = t.optString("uri")
-                    if (!uri.startsWith("spotify:track:")) continue
-                    val artists = t.optJSONArray("artists")
-                    val artist = if (artists != null && artists.length() > 0)
-                        artists.getJSONObject(0).optString("name") else ""
-                    out += PlaylistTrack(uri, t.optString("name"), artist)
-                }
-                root.optString("next").takeIf { it.isNotBlank() && it != "null" }
+        paged("https://api.spotify.com/v1/playlists/$playlistId/items?limit=50", 20) { root ->
+            val items = root.optJSONArray("items") ?: return@paged
+            for (i in 0 until items.length()) {
+                val wrap = items.optJSONObject(i) ?: continue
+                val t = wrap.optJSONObject("item") ?: wrap.optJSONObject("track") ?: continue
+                t.toPlaylistTrack()?.let { out += it }
             }
-            pages++
         }
         out
     }
 
-    /** The user's top tracks (needs the user-top-read scope) for personalized suggestions. */
     suspend fun fetchTopTracks(timeRange: String = "medium_term", limit: Int = 50): List<PlaylistTrack> =
         withContext(Dispatchers.IO) {
-            val token = tokenStore.spotifyAccessToken ?: return@withContext emptyList()
-            val url = "https://api.spotify.com/v1/me/top/tracks?limit=$limit&time_range=$timeRange"
-            val req = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
-            runCatching {
-                client.newCall(req).execute().use { resp ->
-                    if (!resp.isSuccessful) return@use emptyList()
-                    val items = JSONObject(resp.body?.string().orEmpty()).optJSONArray("items")
-                        ?: return@use emptyList()
-                    buildList {
-                        for (i in 0 until items.length()) {
-                            val t = items.getJSONObject(i)
-                            val uri = t.optString("uri")
-                            if (!uri.startsWith("spotify:track:")) continue
-                            val artists = t.optJSONArray("artists")
-                            val artist = if (artists != null && artists.length() > 0)
-                                artists.getJSONObject(0).optString("name") else ""
-                            add(PlaylistTrack(uri, t.optString("name"), artist))
-                        }
-                    }
-                }
-            }.getOrDefault(emptyList())
-        }
-    
-    suspend fun importLibrary(onProgress: (Int) -> Unit = {}): ImportResult = withContext(Dispatchers.IO) {
-        val token = tokenStore.spotifyAccessToken ?: return@withContext ImportResult(0, 0, 0)
-        val tracks = ArrayList<SpotifyTrack>()
-        var url: String? = "https://api.spotify.com/v1/me/tracks?limit=50"
-        var pages = 0
-        while (url != null && pages < 40) {
-            val req = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
-            url = client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@use null
-                val root = JSONObject(resp.body?.string().orEmpty())
-                val items = root.optJSONArray("items") ?: return@use null
-                for (i in 0 until items.length()) {
-                    val t = items.getJSONObject(i).optJSONObject("track") ?: continue
-                    tracks += t.toSpotifyTrack()
-                }
-                onProgress(tracks.size)
-                root.optString("next").takeIf { it.isNotBlank() && it != "null" }
+            val items = getJson("https://api.spotify.com/v1/me/top/tracks?limit=$limit&time_range=$timeRange")
+                ?.optJSONArray("items") ?: return@withContext emptyList()
+            buildList {
+                for (i in 0 until items.length()) items.optJSONObject(i)?.toPlaylistTrack()?.let { add(it) }
             }
-            pages++
+        }
+
+    suspend fun importLibrary(onProgress: (Int) -> Unit = {}): ImportResult = withContext(Dispatchers.IO) {
+        val tracks = ArrayList<SpotifyTrack>()
+        paged("https://api.spotify.com/v1/me/tracks?limit=50", 40) { root ->
+            val items = root.optJSONArray("items") ?: return@paged
+            for (i in 0 until items.length()) {
+                val wrap = items.optJSONObject(i) ?: continue
+                val t = wrap.optJSONObject("item") ?: wrap.optJSONObject("track") ?: continue
+                tracks += t.toSpotifyTrack()
+            }
+            onProgress(tracks.size)
         }
         var matched = 0
         for (st in tracks) {
@@ -195,15 +220,32 @@ class SpotifyRepository @Inject constructor(
         }
         ImportResult(tracks.size, matched, tracks.size - matched)
     }
+
+    private companion object {
+        const val TOKEN_URL = "https://accounts.spotify.com/api/token"
+    }
+}
+
+private fun JSONObject.firstArtist(): String {
+    val artists = optJSONArray("artists")
+    return if (artists != null && artists.length() > 0) artists.optJSONObject(0)?.optString("name").orEmpty() else ""
+}
+
+private fun JSONObject.toPlaylistTrack(): PlaylistTrack? {
+    val uri = optString("uri")
+    if (!uri.startsWith("spotify:track:")) return null
+    val images = optJSONObject("album")?.optJSONArray("images")
+    // Smallest image (last) is plenty for 44dp row thumbnails.
+    val img = if (images != null && images.length() > 0)
+        images.optJSONObject(images.length() - 1)?.optString("url") else null
+    return PlaylistTrack(uri, optString("name"), firstArtist(), img?.ifBlank { null })
 }
 
 private fun JSONObject.toSpotifyTrack(): SpotifyTrack {
-    val artists = optJSONArray("artists")
-    val artist = if (artists != null && artists.length() > 0) artists.getJSONObject(0).optString("name") else ""
     val album = optJSONObject("album")?.optString("name").orEmpty()
     val isrc = optJSONObject("external_ids")?.optString("isrc")?.ifBlank { null }
     return SpotifyTrack(
-        id = optString("id"), title = optString("name"), artist = artist,
+        id = optString("id"), title = optString("name"), artist = firstArtist(),
         album = album, durationMs = optLong("duration_ms"), isrc = isrc,
     )
 }
