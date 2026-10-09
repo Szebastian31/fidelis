@@ -1,48 +1,33 @@
 package com.fidelis.player.ui.theme
 
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics. Color
 
 /**
- * User-selectable skins. Each maps to a Material 3 [ColorScheme] so the whole app
- * re-themes instantly when the user picks one in Profile.
+ * Colour themes. All share the midnight background; each sets the accent gradient
+ * ([start] → [end]) and the [highlight] used for text, sliders and progress.
  */
-enum class Skin(val label: String, val isDark: Boolean) {
-    Daylight("Daylight", false),
-    Vinyl("Vinyl", false),
-    Mint("Mint", false),
-    Nebula("Nebula", false),
-    Midnight("Midnight", true);
-
-    fun scheme(): ColorScheme = when (this) {
-        Daylight -> lightColorScheme(
-            primary = Color(0xFFFF5E3A), background = Color(0xFFF3ECDF),
-            surface = Color(0xFFFBF7EF), onBackground = Color(0xFF1C1A17), onSurface = Color(0xFF1C1A17),
-        )
-        Vinyl -> lightColorScheme(
-            primary = Color(0xFFC65A2E), background = Color(0xFFECE0CC),
-            surface = Color(0xFFF6EEDD), onBackground = Color(0xFF2A2016), onSurface = Color(0xFF2A2016),
-        )
-        Mint -> lightColorScheme(
-            primary = Color(0xFF11A37A), background = Color(0xFFE6F2EC),
-            surface = Color(0xFFF5FBF7), onBackground = Color(0xFF15241D), onSurface = Color(0xFF15241D),
-        )
-        Nebula -> lightColorScheme(
-            primary = Color(0xFF7A5CFF), background = Color(0xFFECE6F7),
-            surface = Color(0xFFF8F5FE), onBackground = Color(0xFF221A33), onSurface = Color(0xFF221A33),
-        )
-        Midnight -> darkColorScheme(
-            primary = Color(0xFF39D7C4), background = Color(0xFF16140F),
-            surface = Color(0xFF211E18), onBackground = Color(0xFFF3ECDF), onSurface = Color(0xFFF3ECDF),
-        )
-    }
+enum class Skin(val label: String, val start: Color, val end: Color, val highlight: Color) {
+    Midnight("Midnight", Color(0xFF8B5CC7), Color(0xFFE4657F), Color(0xFFB49CFF)),
+    Aurora("Aurora", Color(0xFF1F9D8B), Color(0xFF5BB8F0), Color(0xFF7FE0D0)),
+    Sunset("Sunset", Color(0xFFFF7A45), Color(0xFFE4507F), Color(0xFFFFB38A)),
+    Ocean("Ocean", Color(0xFF3A5FD8), Color(0xFF7CC4F5), Color(0xFF9CC8FF)),
+    Rose("Rose", Color(0xFFC2367E), Color(0xFFFF8E8E), Color(0xFFFFA8C8)),
 }
 
 @Composable
 fun FidelisTheme(skin: Skin, content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = skin.scheme(), typography = FidelisType, content = content)
+    // Push the theme's accents into the shared palette before anything draws.
+    remember(skin) { Fidelis.applySkin(skin); skin }
+    val scheme = darkColorScheme(
+        primary = skin.highlight, onPrimary = Color.White,
+        secondary = skin.end, onSecondary = Color.White,
+        background = Fidelis.bg0, onBackground = Color.White,
+        surface = Fidelis.bg1, onSurface = Color.White,
+        surfaceVariant = Fidelis.bg2, onSurfaceVariant = Fidelis.inkMute,
+    )
+    MaterialTheme(colorScheme = scheme, typography = FidelisType, content = content)
 }
