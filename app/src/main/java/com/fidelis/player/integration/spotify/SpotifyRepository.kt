@@ -189,6 +189,34 @@ class SpotifyRepository @Inject constructor(
         out
     }
 
+    /** Liked Songs, newest first. */
+    suspend fun fetchLikedTracks(max: Int = 300): List<PlaylistTrack> = withContext(Dispatchers.IO) {
+        val out = ArrayList<PlaylistTrack>()
+        paged("https://api.spotify.com/v1/me/tracks?limit=50", (max + 49) / 50) { root ->
+            val items = root.optJSONArray("items") ?: return@paged
+            for (i in 0 until items.length()) {
+                val wrap = items.optJSONObject(i) ?: continue
+                val t = wrap.optJSONObject("track") ?: wrap.optJSONObject("item") ?: continue
+                t.toPlaylistTrack()?.let { out += it }
+            }
+        }
+        out.take(max)
+    }
+
+    /** Your last 50 plays, most recent first, without repeats. Needs user-read-recently-played. */
+    suspend fun fetchRecentlyPlayed(): List<PlaylistTrack> = withContext(Dispatchers.IO) {
+        val items = getJson("https://api.spotify.com/v1/me/player/recently-played?limit=50")
+            ?.optJSONArray("items") ?: return@withContext emptyList()
+        val seen = HashSet<String>()
+        buildList {
+            for (i in 0 until items.length()) {
+                val t = items.optJSONObject(i)?.optJSONObject("track")?.toPlaylistTrack() ?: continue
+                if (seen.add(t.uri)) add(t)
+            }
+        }
+    }
+
+    /** Top tracks. timeRange: short_term (~4 weeks), medium_term (~6 months), long_term (all time). */
     suspend fun fetchTopTracks(timeRange: String = "medium_term", limit: Int = 50): List<PlaylistTrack> =
         withContext(Dispatchers.IO) {
             val items = getJson("https://api.spotify.com/v1/me/top/tracks?limit=$limit&time_range=$timeRange")
@@ -204,7 +232,7 @@ class SpotifyRepository @Inject constructor(
             val items = root.optJSONArray("items") ?: return@paged
             for (i in 0 until items.length()) {
                 val wrap = items.optJSONObject(i) ?: continue
-                val t = wrap.optJSONObject("item") ?: wrap.optJSONObject("track") ?: continue
+                val t = wrap.optJSONObject("track") ?: wrap.optJSONObject("item") ?: continue
                 tracks += t.toSpotifyTrack()
             }
             onProgress(tracks.size)
