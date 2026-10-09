@@ -8,10 +8,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape. RoundedCornerShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -20,7 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.ui. Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -39,9 +40,10 @@ fun MoodScreen(onOpenPlayer: () -> Unit, vm: MoodViewModel = hiltViewModel()) {
     val connected by vm.connected.collectAsState()
     val snap by vm.nowPlaying.collectAsState()
     val art by vm.artwork.collectAsState()
+    val progress by vm.progress.collectAsState()
     val playing = snap?.takeIf { it.title.isNotBlank() }
 
-    LaunchedEffect(connected) { if (connected && vm.playlists.isEmpty()) vm.load() }
+    LaunchedEffect(connected) { if (connected) vm.load() }
 
     FidelisBackground {
         Box(Modifier.fillMaxSize()) {
@@ -59,7 +61,7 @@ fun MoodScreen(onOpenPlayer: () -> Unit, vm: MoodViewModel = hiltViewModel()) {
                     item {
                         EmptyState(
                             title = "Connect Spotify",
-                            body = "Mood mixes are built from your own playlists and listening history.",
+                            body = "Mood mixes are built from your own library and listening history.",
                             actionLabel = "Connect Spotify",
                             onAction = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.authUrl()))) },
                             modifier = Modifier.padding(horizontal = 20.dp),
@@ -82,15 +84,14 @@ fun MoodScreen(onOpenPlayer: () -> Unit, vm: MoodViewModel = hiltViewModel()) {
 
                 item { SectionLabel("Build your own", Modifier.padding(horizontal = 20.dp)) }
                 item {
-                    Text("From playlist", color = Fidelis.inkFaint, style = MaterialTheme.typography.labelSmall,
+                    Text("Draw from", color = Fidelis.inkFaint, style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(start = 20.dp, bottom = 8.dp))
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        items(vm.playlists, key = { it.id }) { p ->
-                            FidelisChip(p.name, vm.selected?.id == p.id, { vm.select(p) },
-                                Modifier.widthIn(max = 180.dp))
+                        items(vm.picks, key = { it.key }) { p ->
+                            FidelisChip(p.label, vm.selected == p, { vm.select(p) }, Modifier.widthIn(max = 180.dp))
                         }
                     }
                     Text("Mood", color = Fidelis.inkFaint, style = MaterialTheme.typography.labelSmall,
@@ -106,13 +107,20 @@ fun MoodScreen(onOpenPlayer: () -> Unit, vm: MoodViewModel = hiltViewModel()) {
                 if (vm.building) {
                     item {
                         Column(Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
-                            LinearProgressIndicator(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(50)),
-                                color = Fidelis.violet, trackColor = Fidelis.glass,
-                            )
-                            Text("Reading the mood of each song… the first build takes a few seconds.",
-                                color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 8.dp))
+                            val p = progress
+                            val bar = Modifier.fillMaxWidth().clip(RoundedCornerShape(50))
+                            if (p != null && p.total > 0) {
+                                LinearProgressIndicator(
+                                    progress = { p.done.toFloat() / p.total }, modifier = bar,
+                                    color = Fidelis.violet, trackColor = Fidelis.glass,
+                                )
+                                Text("${p.phase} · ${p.done}/${p.total}", color = Fidelis.inkMute,
+                                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                            } else {
+                                LinearProgressIndicator(bar, color = Fidelis.violet, trackColor = Fidelis.glass)
+                                Text("Gathering your songs…", color = Fidelis.inkMute,
+                                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                            }
                         }
                     }
                 }
@@ -137,7 +145,9 @@ fun MoodScreen(onOpenPlayer: () -> Unit, vm: MoodViewModel = hiltViewModel()) {
                                 Text("${vm.result.size} songs · ordered to flow", color = Fidelis.inkMute,
                                     style = MaterialTheme.typography.bodySmall)
                             }
-                            Spacer(Modifier.width(12.dp))
+                            Spacer(Modifier.width(8.dp))
+                            IconCircle(Icons.Rounded.Refresh, "New order", onClick = vm::regenerate, size = 44.dp)
+                            Spacer(Modifier.width(8.dp))
                             GradientButton("Play", { vm.play(); onOpenPlayer() }, icon = Icons.Rounded.PlayArrow)
                         }
                     }
@@ -145,9 +155,9 @@ fun MoodScreen(onOpenPlayer: () -> Unit, vm: MoodViewModel = hiltViewModel()) {
                         TrackRow(
                             title = t.title,
                             subtitle = if (t.matched.isNotEmpty()) "${t.artist} · ${t.matched.take(2).joinToString(", ")}" else t.artist,
-                            index = i + 1,
+                            imageUrl = t.imageUrl,
                             highlighted = t.uri == snap?.uri,
-                            onClick = { vm.play(); onOpenPlayer() },
+                            onClick = { vm.playFrom(i); onOpenPlayer() },
                         )
                     }
                 }
