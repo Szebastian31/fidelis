@@ -27,6 +27,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.fidelis.player.ui.mood.MixDetailScreen
 import com.fidelis.player.ui.mood.MoodScreen
 import com.fidelis.player.ui.player.NowPlayingScreen
 import com.fidelis.player.ui.playlists.PlaylistDetailScreen
@@ -46,11 +47,17 @@ private enum class Dest(val route: String, val label: String, val icon: ImageVec
 
 private const val PLAYER = "nowplaying"
 private const val DETAIL = "playlist/{playlistId}"
+private const val MIX = "mix/{mixId}"
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.toPlayer() =
     targetState.destination.route == PLAYER
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.fromPlayer() =
     initialState.destination.route == PLAYER
+
+private val pageIn: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition =
+    { slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(220)) }
+private val pageOut: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition =
+    { slideOutHorizontally(tween(260)) { it / 3 } + fadeOut(tween(200)) }
 
 @Composable
 fun AppNavHost(
@@ -73,15 +80,16 @@ fun AppNavHost(
             PlaylistsScreen(onOpenPlaylist = { id -> nav.navigate("playlist/$id") }, onOpenPlayer = openPlayer)
         }
         composable(Dest.Search.route) { SearchScreen(onOpenPlayer = openPlayer) }
-        composable(Dest.Mood.route) { MoodScreen(onOpenPlayer = openPlayer) }
+        composable(Dest.Mood.route) {
+            MoodScreen(onOpenPlayer = openPlayer, onOpenMix = { id -> nav.navigate("mix/$id") { launchSingleTop = true } })
+        }
         composable(Dest.Profile.route) { ProfileScreen(currentSkin, onSkinChange) }
 
-        composable(
-            DETAIL,
-            enterTransition = { slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(220)) },
-            popExitTransition = { slideOutHorizontally(tween(260)) { it / 3 } + fadeOut(tween(200)) },
-        ) {
+        composable(DETAIL, enterTransition = pageIn, popExitTransition = pageOut) {
             PlaylistDetailScreen(onBack = { nav.popBackStack() }, onOpenPlayer = openPlayer)
+        }
+        composable(MIX, enterTransition = pageIn, popExitTransition = pageOut) {
+            MixDetailScreen(onBack = { nav.popBackStack() }, onOpenPlayer = openPlayer)
         }
 
         composable(
@@ -112,7 +120,9 @@ fun BottomBar(nav: NavHostController) {
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 Dest.entries.forEach { dest ->
-                    val selected = route == dest.route || (dest == Dest.Playlists && route == DETAIL)
+                    val selected = route == dest.route ||
+                        (dest == Dest.Playlists && route == DETAIL) ||
+                        (dest == Dest.Mood && route == MIX)
                     Column(
                         Modifier.pressable {
                             nav.navigate(dest.route) {
@@ -120,7 +130,7 @@ fun BottomBar(nav: NavHostController) {
                                 launchSingleTop = true; restoreState = true
                             }
                         }.padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                        horizontalAlignment = Alignment. CenterHorizontally,
                     ) {
                         Box(
                             Modifier.size(width = 56.dp, height = 32.dp).clip(CircleShape)
