@@ -1,8 +1,11 @@
 package com.fidelis.player.ui.navigation
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape. CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -16,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -34,6 +38,14 @@ private enum class Dest(val route: String, val label: String) {
     Playlists("playlists", "Playlists"), Mood("mood", "Mood"), Profile("profile", "Profile")
 }
 
+private const val PLAYER = "nowplaying"
+private const val DETAIL = "playlist/{playlistId}"
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.toPlayer() =
+    targetState.destination.route == PLAYER
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.fromPlayer() =
+    initialState.destination.route == PLAYER
+
 @Composable
 fun AppNavHost(
     nav: NavHostController,
@@ -41,19 +53,44 @@ fun AppNavHost(
     onSkinChange: (Skin) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    NavHost(nav, startDestination = Dest.Playlists.route, modifier = modifier) {
+    NavHost(
+        nav, startDestination = Dest.Playlists.route, modifier = modifier,
+        // Defaults: soft cross-fade. Screens under the player stay put while it slides.
+        enterTransition = { fadeIn(tween(220)) },
+        exitTransition = { if (toPlayer()) fadeOut(tween(400), targetAlpha = 1f) else fadeOut(tween(180)) },
+        popEnterTransition = { if (fromPlayer()) EnterTransition.None else fadeIn(tween(220)) },
+        popExitTransition = { fadeOut(tween(180)) },
+    ) {
         composable(Dest.Playlists.route) {
             PlaylistsScreen(
                 onOpenPlaylist = { id -> nav.navigate("playlist/$id") },
-                onOpenPlayer = { nav.navigate("nowplaying") },
+                onOpenPlayer = { nav.navigate(PLAYER) { launchSingleTop = true } },
             )
         }
-        composable(Dest.Mood.route) { MoodScreen(onOpenPlayer = { nav.navigate("nowplaying") }) }
-        composable(Dest.Profile.route) { ProfileScreen(currentSkin, onSkinChange) }
-        composable("playlist/{playlistId}") {
-            PlaylistDetailScreen(onBack = { nav.popBackStack() }, onOpenPlayer = { nav.navigate("nowplaying") })
+        composable(Dest.Mood.route) {
+            MoodScreen(onOpenPlayer = { nav.navigate(PLAYER) { launchSingleTop = true } })
         }
-        composable("nowplaying") { NowPlayingScreen(onBack = { nav.popBackStack() }) }
+        composable(Dest.Profile.route) { ProfileScreen(currentSkin, onSkinChange) }
+
+        composable(
+            DETAIL,
+            enterTransition = { slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(220)) },
+            popExitTransition = { slideOutHorizontally(tween(260)) { it / 3 } + fadeOut(tween(200)) },
+        ) {
+            PlaylistDetailScreen(
+                onBack = { nav.popBackStack() },
+                onOpenPlayer = { nav.navigate(PLAYER) { launchSingleTop = true } },
+            )
+        }
+
+        composable(
+            PLAYER,
+            enterTransition = { slideInVertically(tween(380, easing = FastOutSlowInEasing)) { it } },
+            exitTransition = { fadeOut(tween(180)) },
+            popExitTransition = { slideOutVertically(tween(320, easing = FastOutSlowInEasing)) { it } },
+        ) {
+            NowPlayingScreen(onBack = { nav.popBackStack() })
+        }
     }
 }
 
@@ -61,48 +98,53 @@ fun AppNavHost(
 fun BottomBar(nav: NavHostController) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
-    if (route == "nowplaying") return
 
-    Column(Modifier.fillMaxWidth().background(Fidelis.bg0.copy(alpha = 0.97f))) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Fidelis.line))
-        Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            Dest.entries.forEach { dest ->
-                val selected = route == dest.route ||
-                    (dest == Dest.Playlists && route?.startsWith("playlist/") == true)
-                Column(
-                    Modifier.pressable {
-                        nav.navigate(dest.route) {
-                            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true; restoreState = true
-                        }
-                    }.padding(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Box(
-                        Modifier.size(width = 60.dp, height = 32.dp).clip(CircleShape)
-                            .then(if (selected) Modifier.background(Fidelis.glassStrong) else Modifier),
-                        contentAlignment = Alignment.Center,
+    AnimatedVisibility(
+        visible = route != PLAYER,
+        enter = expandVertically(tween(300)) + fadeIn(tween(300)),
+        exit = shrinkVertically(tween(300)) + fadeOut(tween(200)),
+    ) {
+        Column(Modifier.fillMaxWidth().background(Fidelis.bg0.copy(alpha = 0.97f))) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Fidelis.line))
+            Row(
+                Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                Dest.entries.forEach { dest ->
+                    val selected = route == dest.route ||
+                        (dest == Dest. Playlists && route == DETAIL)
+                    Column(
+                        Modifier.pressable {
+                            nav.navigate(dest.route) {
+                                popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true; restoreState = true
+                            }
+                        }.padding(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Icon(
-                            when (dest) {
-                                Dest.Playlists -> Icons.AutoMirrored.Rounded.QueueMusic
-                                Dest.Mood -> Icons.Rounded.AutoAwesome
-                                Dest.Profile -> Icons.Rounded.Person
-                            },
-                            contentDescription = dest.label,
-                            tint = if (selected) Fidelis.ink else Fidelis.inkMute,
-                            modifier = Modifier.size(22.dp),
+                        Box(
+                            Modifier.size(width = 60.dp, height = 32.dp).clip(CircleShape)
+                                .then(if (selected) Modifier.background(Fidelis.glassStrong) else Modifier),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                when (dest) {
+                                    Dest.Playlists -> Icons.AutoMirrored.Rounded.QueueMusic
+                                    Dest.Mood -> Icons.Rounded.AutoAwesome
+                                    Dest.Profile -> Icons.Rounded.Person
+                                },
+                                contentDescription = dest.label,
+                                tint = if (selected) Fidelis.ink else Fidelis.inkMute,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            dest.label,
+                            color = if (selected) Fidelis.ink else Fidelis.inkMute,
+                            style = MaterialTheme.typography.labelSmall,
                         )
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        dest.label,
-                        color = if (selected) Fidelis.ink else Fidelis.inkMute,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
                 }
             }
         }
