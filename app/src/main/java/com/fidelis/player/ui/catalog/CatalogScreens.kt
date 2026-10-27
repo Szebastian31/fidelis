@@ -115,9 +115,9 @@ fun ArtistScreen(
                             item { ReleaseRow(vm.singles, onOpenAlbum) }
                         }
                         if (hasSongs) {
-                            item { SectionLabel("Songs", pad) }
+                            item { SectionLabel(if (vm.byPopularity) "Popular on Last.fm" else "Songs", pad) }
                             itemsIndexed(vm.songs, key = { _, t -> t.uri }) { i, t ->
-                                SongRow(title = t.title, subtitle = t.artist, onClick = { vm.play(i) },
+                                SongRow(title = t.title, subtitle = vm.subtitle(t), onClick = { vm.play(i) },
                                     onMore = { sheetFor = t }, imageUrl = t.imageUrl, highlighted = snap?.uri == t.uri)
                             }
                         }
