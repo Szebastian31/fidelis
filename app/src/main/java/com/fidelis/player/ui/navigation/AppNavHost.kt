@@ -2,8 +2,11 @@ package com.fidelis.player.ui.navigation
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -19,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavBackStackEntry
@@ -67,7 +71,6 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
 ) {
     val openPlayer = { nav.navigate(PLAYER) { launchSingleTop = true } }
-
     NavHost(
         nav, startDestination = Dest.Playlists.route, modifier = modifier,
         // Defaults: soft cross-fade. Screens under the player stay put while it slides.
@@ -84,14 +87,12 @@ fun AppNavHost(
             MoodScreen(onOpenPlayer = openPlayer, onOpenMix = { id -> nav.navigate("mix/$id") { launchSingleTop = true } })
         }
         composable(Dest.Profile.route) { ProfileScreen(currentSkin, onSkinChange) }
-
         composable(DETAIL, enterTransition = pageIn, popExitTransition = pageOut) {
             PlaylistDetailScreen(onBack = { nav.popBackStack() }, onOpenPlayer = openPlayer)
         }
         composable(MIX, enterTransition = pageIn, popExitTransition = pageOut) {
             MixDetailScreen(onBack = { nav.popBackStack() }, onOpenPlayer = openPlayer)
         }
-
         composable(
             PLAYER,
             enterTransition = { slideInVertically(tween(380, easing = FastOutSlowInEasing)) { it } },
@@ -103,46 +104,52 @@ fun AppNavHost(
     }
 }
 
+/** Floating glass capsule. The selected tab grows into an accent pill with its label. */
 @Composable
 fun BottomBar(nav: NavHostController) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
-
     AnimatedVisibility(
         visible = route != PLAYER,
-        enter = expandVertically(tween(300)) + fadeIn(tween(300)),
-        exit = shrinkVertically(tween(300)) + fadeOut(tween(200)),
+        enter = slideInVertically(tween(320)) { it } + fadeIn(tween(300)),
+        exit = slideOutVertically(tween(280)) { it } + fadeOut(tween(200)),
     ) {
-        Column(Modifier.fillMaxWidth().background(Fidelis.bg0.copy(alpha = 0.97f))) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Fidelis.line))
+        Box(
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
             Row(
-                Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                Modifier.shadow(24.dp, CircleShape).clip(CircleShape)
+                    .background(Fidelis.bg1.copy(alpha = 0.94f)).border(1.dp, Fidelis.border, CircleShape)
+                    .padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Dest.entries.forEach { dest ->
                     val selected = route == dest.route ||
                         (dest == Dest.Playlists && route == DETAIL) ||
                         (dest == Dest.Mood && route == MIX)
-                    Column(
-                        Modifier.pressable {
-                            nav.navigate(dest.route) {
-                                popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true; restoreState = true
+                    Row(
+                        Modifier
+                            .pressable {
+                                nav.navigate(dest.route) {
+                                    popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true; restoreState = true
+                                }
                             }
-                        }.padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalAlignment = Alignment. CenterHorizontally,
+                            .clip(CircleShape)
+                            .then(if (selected) Modifier.background(Fidelis.accent) else Modifier)
+                            .animateContentSize(spring(stiffness = Spring.StiffnessMediumLow))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Box(
-                            Modifier.size(width = 56.dp, height = 32.dp).clip(CircleShape)
-                                .then(if (selected) Modifier.background(Fidelis.glassStrong) else Modifier),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(dest.icon, contentDescription = dest.label,
-                                tint = if (selected) Fidelis.ink else Fidelis.inkMute, modifier = Modifier.size(22.dp))
+                        Icon(dest.icon, contentDescription = dest.label,
+                            tint = if (selected) Fidelis.ink else Fidelis.inkMute, modifier = Modifier.size(22.dp))
+                        if (selected) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(dest.label, color = Fidelis.ink, style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1, softWrap = false)
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Text(dest.label, color = if (selected) Fidelis.ink else Fidelis.inkMute,
-                            style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

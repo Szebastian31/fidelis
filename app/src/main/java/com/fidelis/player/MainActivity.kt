@@ -4,7 +4,9 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -30,7 +32,7 @@ import com.spotify.sdk.android.auth.AuthorizationRequest
 import com.spotify.sdk.android.auth.AuthorizationResponse
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
-import javax.inject. Inject
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -41,12 +43,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // The sky runs edge to edge, behind the status and navigation bars, with light icons on top.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         handleIntent(intent)
         scrobbler.start()
 
         // Android 13+: the media notification won't show without this grant.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(android.Manifest.permission. POST_NOTIFICATIONS) !=
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 2001)
@@ -58,7 +65,7 @@ class MainActivity : ComponentActivity() {
             var skin by remember {
                 mutableStateOf(
                     runCatching { Skin.valueOf(uiPrefs.getString("skin", null).orEmpty()) }
-                        .getOrDefault(Skin.Midnight)
+                        .getOrDefault(Skin.Night)
                 )
             }
             FidelisTheme(skin = skin) {
