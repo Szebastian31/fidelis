@@ -5,9 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Favorite
@@ -16,21 +14,11 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout. ContentScale
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -53,68 +41,41 @@ fun PlaylistDetailScreen(
     FidelisBackground {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
             item {
-                Box(Modifier.fillMaxWidth()) {
-                    // Blurred cover as a soft backdrop behind the header.
-                    p?.imageUrl?.let {
-                        AsyncImage(it, null, Modifier.matchParentSize().blur(60.dp).alpha(0.45f),
-                            contentScale = ContentScale.Crop)
-                        Box(Modifier.matchParentSize().background(
-                            Brush.verticalGradient(listOf(Color.Transparent, Fidelis.bg0.copy(alpha = 0.95f)))
-                        ))
-                    }
-
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-                        Spacer(Modifier.height(16.dp))
-                        IconCircle(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
-                        Spacer(Modifier.height(12.dp))
-
-                        val shape = RoundedCornerShape(24.dp)
-                        Box(
-                            Modifier.align(Alignment.CenterHorizontally).size(210.dp).shadow(28.dp, shape).clip(shape)
-                                .background(if (vm.isLiked) Fidelis.accent else Brush.linearGradient(listOf(Fidelis.glass, Fidelis.glass))),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            when {
-                                vm.isLiked -> Icon(Icons.Rounded.Favorite, null, tint = Fidelis.ink, modifier = Modifier.size(72.dp))
-                                p?.imageUrl != null -> AsyncImage(p.imageUrl, p.name, Modifier.fillMaxSize(), contentScale = ContentScale. Crop)
-                                else -> Icon(Icons.Rounded.MusicNote, null, tint = Fidelis.inkFaint, modifier = Modifier.size(48.dp))
+                val count = if (tracks.isNotEmpty()) tracks.size else p?.trackCount ?: 0
+                DetailHeader(
+                    eyebrow = if (vm.isLiked) "Your library" else "Playlist",
+                    title = if (vm.isLiked) "Liked Songs" else p?.name ?: "Playlist",
+                    meta = if (count > 0) "$count songs" else null,
+                    backdropUrl = if (vm.isLiked) null else p?.imageUrl,
+                    onBack = onBack,
+                    cover = {
+                        when {
+                            vm.isLiked -> Box(Modifier.fillMaxSize().background(Fidelis.accent), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Favorite, null, tint = Fidelis.ink, modifier = Modifier.size(80.dp))
                             }
+                            p?.imageUrl != null -> AsyncImage(p.imageUrl, p.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            else -> Icon(Icons.Rounded.MusicNote, null, tint = Fidelis.inkFaint, modifier = Modifier.size(48.dp))
                         }
-
-                        Spacer(Modifier.height(20.dp))
-                        Text(p?.name ?: "Playlist", color = Fidelis.ink, style = MaterialTheme.typography.headlineSmall,
-                            textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth())
-                        val count = if (tracks.isNotEmpty()) tracks.size else p?.trackCount ?: 0
-                        if (count > 0) {
-                            Text("$count songs", color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
-                                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
-                        }
-
-                        Spacer(Modifier.height(20.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            GradientButton(
-                                text = "Play", icon = Icons.Rounded.PlayArrow, enabled = !vm.loading,
-                                onClick = {
-                                    if (tracks.isNotEmpty()) vm.playFrom(0) else vm.playInSpotify()
-                                    onOpenPlayer()
-                                },
-                                modifier = Modifier.weight(1f),
-                            )
-                            SoftButton(
-                                text = "Shuffle", icon = Icons.Rounded.Shuffle, enabled = tracks.isNotEmpty(),
-                                onClick = { vm.shuffle(); onOpenPlayer() }, modifier = Modifier.weight(1f),
-                            )
-                            if (tracks.isNotEmpty()) {
-                                IconCircle(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add all to queue", size = 52.dp,
-                                    onClick = { vm.addAllToQueue(); toast("Added ${tracks.size} songs to queue") })
-                            }
-                        }
-                        Spacer(Modifier.height(16.dp))
+                    },
+                ) {
+                    GradientButton(
+                        text = "Play", icon = Icons.Rounded.PlayArrow, enabled = !vm.loading,
+                        onClick = {
+                            if (tracks.isNotEmpty()) vm.playFrom(0) else vm.playInSpotify()
+                            onOpenPlayer()
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    SoftButton(
+                        text = "Shuffle", icon = Icons. Rounded.Shuffle, enabled = tracks.isNotEmpty(),
+                        onClick = { vm.shuffle(); onOpenPlayer() }, modifier = Modifier.weight(1f),
+                    )
+                    if (tracks.isNotEmpty()) {
+                        IconCircle(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add all to queue", size = 52.dp,
+                            onClick = { vm.addAllToQueue(); toast("Added ${tracks.size} songs to queue") })
                     }
                 }
             }
-
             when {
                 vm.loading -> items(8) {
                     Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -127,12 +88,11 @@ fun PlaylistDetailScreen(
                         }
                     }
                 }
-
                 tracks.isEmpty() -> item {
                     if (vm.isLiked) {
                         EmptyState(
                             title = "No liked songs yet",
-                            body = "Songs you ♥ in Spotify show up here.",
+                            body = "Songs you ♥ in Spotify or in the Fidelis player show up here.",
                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                         )
                     } else {
@@ -146,7 +106,6 @@ fun PlaylistDetailScreen(
                         )
                     }
                 }
-
                 else -> itemsIndexed(tracks, key = { i, t -> "$i-${t.uri}" }) { i, t ->
                     SongRow(
                         title = t.title, subtitle = t.artist, imageUrl = t.imageUrl,
@@ -171,4 +130,3 @@ fun PlaylistDetailScreen(
         )
     }
 }
-
