@@ -1,80 +1,90 @@
 # Fidelis
 
-A premium **Spotify companion** for Android. Fidelis imports your Spotify playlists, plays full tracks by bridging to the installed Spotify app, builds mood-based mixes from your library using Last.fm tags, scrobbles to Last.fm, and wraps it all in a polished, glassy UI.
+**A faithful companion for your Spotify: mood mixes, discoveries, lyrics and a queue that remembers.**
 
-> Working name — change `fidelis` / `com.fidelis.player` to whatever you like.
+Fidelis plays through the Spotify app on your phone and adds what Spotify doesn't: mixes built from how songs feel, a queue you fully control, synced lyrics and Last.fm scrobbling. No ads, no account of its own, no server.
+
+![Fidelis on five phones: Listen, an artist page, the player, lyrics and Mood](screenshots/banner.png)
+
+---
+
+☕️ You can support me and Buy me a coffee ☕️
+
+https://buycoffee.to/szebastian
+
+---
 
 ## What it does
 
-- **Playlists.** Imports your Spotify playlists; tap a playlist to see its track list, then play from any song.
-- **Mood mixes.** Suggested mixes (e.g. "On repeat lately", "Chill afternoon vibes", "Morning energy boost") plus a build-your-own flow: pick a playlist + a mood and Fidelis scores and orders tracks for a smooth set. Ordering uses **per-track Last.fm tags** (falling back to per-artist tags), chained nearest-neighbour so adjacent songs share mood.
-- **Full-screen player.** Album-art hero, real transport controls, seek, and an "Up next" queue with reshuffle. A compact now-playing pill on the other tabs expands into it.
-- **System media notification.** A `MediaSession` + MediaStyle foreground notification mirrors the bridge state, so lock-screen controls and the ColorOS **Fluid Cloud** capsule work and point at Fidelis.
-- **Last.fm scrobbling.** Personal session via `auth.getMobileSession`, stored encrypted on-device.
-- **Skins + premium styling.** Multiple color skins (Daylight / Vinyl / Mint / Nebula / Midnight), a custom rounded/bold type scale, violet→pink accent gradient, and frosted-glass cards — modeled on the "Consensus Weather" look.
+- **Listen.** Your library at a glance: **Quick picks** (your most played of the last 4 weeks), **Listen again** (recently played), **Heavy rotation** (your top artists of the last 6 months), then Liked Songs and your playlists.
+- **A player made for the cover.** The artwork fills the screen and glows softly under the controls in its own colour. Tap it to see the whole cover (it grows back after 5 seconds), swipe it left or right for the next or previous song, and swipe down to close.
+- **Synced lyrics.** The current line glows and follows the song; tap any line to jump there. Lyrics come from LRCLIB, with plain lyrics when timed ones aren't available.
+- **A queue that's yours.** Play next, add to queue, drag songs into a new order, shuffle or clear Up next. **Previous** goes back through the last 10 songs you played, instead of just restarting the current one.
+- **Search everything in one bar.** Results come back as Artists, Albums and Songs.
+- **Artist pages.** Albums, then Singles & EPs, then their songs ordered by popularity on Last.fm, with play counts.
+- **Artist radio.** Mostly that artist, with songs in a similar vibe mixed in: two of theirs, then one similar.
+- **Album pages.** Every song in the album's own order, disc by disc. Play it as it is, or shuffle.
+- **Mood mixes.** Chill, Energetic, Focus, Party, Happy or Melancholy, built from your own songs using Last.fm tags, ordered so each song flows into the next. Mixes are saved as tiles you can come back to.
+- **Discoveries.** Mixes that blend your favourites with new songs like them (about two of yours for every new one), each marked **NEW**.
+- **Scrobbling to Last.fm.** Everything you play through Fidelis is scrobbled, following Last.fm's rules.
+- **Lock screen and Fluid Cloud.** Play, pause, skip and ❤ from the lock screen, the notification shade and the Fluid Cloud capsule on Oppo phones. ❤ saves the song to your Spotify Liked Songs.
+- **Five looks.** Night, Dawn, Aurora, Ocean and Midnight (pure black, for OLED screens).
 
-## How playback works (the bridge)
+## Screens
 
-Fidelis does **not** stream audio itself — the Spotify Web API doesn't provide audio. Instead it remote-controls the installed Spotify app via the **Spotify App Remote SDK**:
+<p>
+  <img src="screenshots/listen.png" width="19%" alt="Listen: Quick picks, Listen again, Heavy rotation and playlists">
+  <img src="screenshots/player.png" width="19%" alt="The player with the cover's ambient glow">
+  <img src="screenshots/lyrics.png" width="19%" alt="Synced lyrics">
+  <img src="screenshots/artist.png" width="19%" alt="An artist page with popular songs from Last.fm">
+  <img src="screenshots/mood.png" width="19%" alt="Mood mixes and discoveries">
+</p>
 
-- Requires **Spotify Premium** and the **Spotify app installed** on the device.
-- Fidelis keeps the full planned order and feeds Spotify the next ~3 tracks via the queue as playback advances (lazy "3-ahead" queue).
-- **Crossfade, Automix, audio quality, and EQ are owned by the Spotify app**, not Fidelis — adjust those in Spotify's own settings. The in-app copy is honest about this.
+## Getting started
 
-Mood/similarity signals come from **Last.fm** (`track.getTopTags`, `artist.getTopTags`, `track.getSimilar`), since Spotify removed audio-features/recommendations from the Web API.
+You need the **Spotify app**, installed and signed in on the same phone. Premium works best: on Spotify Free, Spotify may shuffle instead of playing the exact song you picked.
 
-## Stack
+1. Open **[Releases](../../releases)** on your phone and download **fidelis-debug.apk** from **Latest debug build**.
+2. Open the file. If Android asks, allow your browser to **install unknown apps**.
+3. Open Fidelis and allow **notifications**, so the lock-screen controls and Fluid Cloud work.
+4. In **Profile**, connect your **Spotify account** (playlists, search and library), then **Playback** (the link to the Spotify app). Sign in to **Last.fm** for scrobbling, mood tags and popularity.
+5. **On Oppo / ColorOS:** Profile → **Open app settings**, then turn on **Allow auto launch** and **Allow background activity**, and set **Battery** to **Don't optimise**. Otherwise ColorOS can freeze Fidelis while the screen is off and Up next stops after the current song.
 
-- Kotlin, Jetpack Compose + Material 3, Navigation-Compose
-- Hilt (DI), Coroutines + Flow
-- Spotify **App Remote** SDK (`app/libs/spotify-app-remote-release-0.8.0.aar`) + Spotify **Auth** library (`com.spotify.android:auth`) for OAuth
-- OkHttp + `org.json` for Spotify Web API & Last.fm calls
-- Media3 session + `androidx.media:media` (`MediaSessionCompat` / MediaStyle notification)
-- Coil (artwork), `androidx.security:security-crypto` (encrypted tokens)
-- Room + Media3 ExoPlayer are retained from the earlier local-player scaffold and are largely vestigial now that playback goes through the bridge.
+Updating: install the new APK over the old one. Your sign-ins and mixes stay.
 
-## Setup
+## What it can't do
 
-### 1. Spotify dashboard
-In your Spotify Developer dashboard app:
-- Add the redirect URI `fidelis://auth`.
-- Register the Android package `com.fidelis.player` with the signing **SHA-1 fingerprint**. CI signs with the committed `fidelis-debug.keystore`, so its SHA-1 is stable — register that one.
+Spotify limits what apps like Fidelis can see. Fidelis can only list the songs of playlists you created or collaborate on (others still play in full through Spotify), search returns at most 10 results per type at a time, and artist songs are ranked by Last.fm because Spotify no longer shares its own top songs.
 
-### 2. Secrets
-Put your keys in `local.properties` (git-ignored); they're exposed via `BuildConfig`:
+## Privacy
 
-```
-SPOTIFY_CLIENT_ID=xxxxxxxx
-LASTFM_API_KEY=xxxxxxxx
-LASTFM_SECRET=xxxxxxxx
-```
+There's no Fidelis server and no analytics. Your Spotify and Last.fm sign-ins are stored encrypted on your phone. Fidelis talks only to Spotify (your library and playback), Last.fm (song and artist names, for tags, similar songs, popularity and scrobbles) and LRCLIB (the title and artist of the song you open lyrics for). Saved mixes and the tag cache stay on your phone.
 
-The Spotify **Client ID is public** (PKCE, no client secret in the app). Keep the Last.fm secret and any tokens out of version control.
+---
 
-### 3. Build
-GitHub Actions builds a debug APK (`assembleDebug`), signed with the committed debug keystore for a stable fingerprint. Download the artifact and install it on your device.
+_Fidelis is Latin for faithful. Its root, fidēs, was also the Roman word for the strings of a lyre. It's a sibling to Consensus Weather, Kalendae, Vestis, Caelum, Hora and Augur._
 
-## Per-user accounts
+<details>
+<summary>For developers</summary>
 
-The app ships **only public identifiers**; each user authenticates their own accounts:
+A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines, Coil, OkHttp). It plays through the Spotify app with the Spotify App Remote SDK and reads your library through the Spotify Web API (PKCE sign-in). GitHub Actions builds a debug APK on every push to `main` and publishes it to the **latest-debug** release.
 
-- **Spotify** — OAuth 2.0 (TOKEN via the Auth library, explicit approval screen), then App Remote connects. Tokens stored per-device in `EncryptedSharedPreferences`.
-- **Last.fm** — public `api_key` + `shared_secret` sign requests; each user's session key is stored encrypted on-device.
+| Where | What it is |
+| --- | --- |
+| `integration/spotify/` | `SpotifyRepository` (Web API, sign-in, token refresh), `SpotifyRemote` (App Remote bridge, plus Fidelis's own Up next and 10-song history), `SpotifyCatalog` (search, artists, albums), `ArtistRadio`, `HomeFeed` |
+| `integration/lastfm/` | Tags, similar songs and top tracks (`LastfmApiImpl`, `LastfmTop`), sign-in, and scrobbling (`BridgeScrobbler`) |
+| `integration/lyrics/` | `LrcLib`: synced and plain lyrics |
+| `mood/` | `MoodRepository` (mood scoring, flow ordering, discoveries), `TagCache`, `MixStore`, and the Mood screens |
+| `playback/` | `PlaybackService`: media session and notification for the lock screen and Fluid Cloud |
+| `ui/` | Screens; `ui/theme/` holds the looks, the Manrope type and shared components |
+| `tools/install.sh` | Waits for the build of your last push and installs it on the plugged-in phone |
+| `tools/screenshots.sh`, `tools/banner.html` | Make everything in `screenshots/` from the phone |
+| `.github/workflows/android.yml` | Builds the APK and publishes it to the latest-debug release |
 
-Encrypted storage (`SecureTokenStore`) self-heals: if the Keystore master key no longer matches the encrypted file (e.g. after a reinstall), it wipes and recreates the store instead of crashing. `allowBackup` is disabled to avoid restoring an unreadable encrypted file onto a device with a different key.
+**Keys.** Put `SPOTIFY_CLIENT_ID`, `LASTFM_API_KEY` and `LASTFM_SECRET` in `local.properties` (git-ignored) for local builds, and as repository secrets for GitHub Actions. Never commit them.
 
-## Requirements
+**Spotify setup.** In the Spotify developer dashboard, add the redirect URI `fidelis://auth` and the Android package `com.fidelis.player` with the SHA-1 of `fidelis-debug.keystore`. In Development Mode, only accounts added under User Management can sign in.
 
-- Android 8.0+ (minSdk 26); tested on ColorOS (Oppo Find X9 Pro).
-- Spotify Premium + Spotify app installed.
-- Notification permission (Android 13+) for the media notification.
+**Build and install:** push to `main`, then run `tools/install.sh`. **Screenshots:** `tools/screenshots.sh`, or `tools/screenshots.sh --banner-only` to rebuild just the banner.
 
-## Known gaps
-
-- **Scrobbling isn't wired to the bridge yet** — the scrobble path still targets the old local player, so plays don't currently reach Last.fm. (Planned: hook scrobbling to the bridge's player state.)
-- Crossfade/EQ can't be controlled from Fidelis by design (Spotify owns the audio).
-- The status-bar icon uses a stock glyph; a monochrome `ic_stat_fidelis` is a TODO.
-
-## License / attribution
-
-If you reuse code or structure from other projects (e.g. Apache-2.0 sources), include their attribution in a `NOTICE` file.
+</details>
