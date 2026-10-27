@@ -17,6 +17,7 @@ data class AlbumItem(
     /** "Album · 2021", "Single · 2024". */
     val label: String get() =
         listOf(type.replaceFirstChar { it.uppercase() }, year).filter { it.isNotBlank() }.joinToString(" · ")
+    val isSingle get() = type.equals("single", ignoreCase = true)
 }
 
 data class SearchResults(val artists: List<ArtistItem>, val albums: List<AlbumItem>, val tracks: List<PlaylistTrack>) {
@@ -51,15 +52,15 @@ class SpotifyCatalog @Inject constructor(private val repo: SpotifyRepository) {
         repo.getJson("$API/artists/$id")?.toArtist()
     }
 
-    /** Albums and singles, newest first, up to 40. */
+    /** Albums and singles, newest first, up to 50. */
     suspend fun artistAlbums(id: String): List<AlbumItem> = withContext(Dispatchers.IO) {
         val out = ArrayList<AlbumItem>()
-        for (page in 0 until 4) {
+        for (page in 0 until 5) {
             val root = repo.getJson("$API/artists/$id/albums?include_groups=album,single&limit=10&offset=${page * 10}") ?: break
             out += root.optJSONArray("items").objects().mapNotNull { it.toAlbum() }
             if (root.isNull("next")) break
         }
-        out.distinctBy { it.name.lowercase() }
+        out.distinctBy { "${it.type}|${it.name.lowercase()}" }.sortedByDescending { it.year }
     }
 
     /** Spotify no longer offers an artist's top songs, so search their name instead. */
@@ -72,15 +73,27 @@ class SpotifyCatalog @Inject constructor(private val repo: SpotifyRepository) {
             .distinctBy { it.title.lowercase() }
     }
 
+    /** The album with every song in its own order (disc, then track number), any length. */
     suspend fun album(id: String): AlbumPage? = withContext(Dispatchers.IO) {
         val root = repo.getJson("$API/albums/$id") ?: return@withContext null
         val album = root.toAlbum() ?: return@withContext null
+        val raw = ArrayList<JSONObject>()
+        var page: JSONObject? = root.optJSONObject("tracks")
+        var guard = 0
+        while (page != null && guard++ < 30) {
+            val p = page
+            raw += p.optJSONArray("items").objects()
+            val next = if (p.isNull("next")) "" else p.optString("next")
+            page = if (next.isBlank()) null else repo.getJson(next)
+        }
         // Album tracks carry no cover of their own; use the album's.
-        val tracks = root.optJSONObject("tracks")?.optJSONArray("items").objects().mapNotNull { t ->
-            val uri = t.optString("uri")
-            if (!uri.startsWith("spotify:track:")) null
-            else PlaylistTrack(uri, t.optString("name"), t.leadArtist().ifBlank { album.artist }, album.imageUrl)
-        }.distinctBy { it.uri }
+        val tracks = raw
+            .sortedWith(compareBy({ it.optInt("disc_number", 1) }, { it.optInt("track_number", 0) }))
+            .mapNotNull { t ->
+                val uri = t.optString("uri")
+                if (!uri.startsWith("spotify:track:")) null
+                else PlaylistTrack(uri, t.optString("name"), t.leadArtist().ifBlank { album.artist }, album.imageUrl)
+            }.distinctBy { it.uri }
         AlbumPage(album, tracks)
     }
 
