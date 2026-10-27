@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.fidelis.player.audio.SoundEngine.init(this)
         // The sky runs edge to edge, behind the status and navigation bars, with light icons on top.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
