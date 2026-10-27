@@ -118,6 +118,7 @@ fun ProfileScreen(current: Skin, onSkinChange: (Skin) -> Unit, vm: ProfileViewMo
                 }
             }
 
+            SoundTestCard()
             SectionLabel("Keep playing in the background")
             GlassCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
