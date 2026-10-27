@@ -97,7 +97,7 @@ class SpotifyRepository @Inject constructor(
         Request.Builder().url(url).header("Authorization", "Bearer $token").build()
 
     /** GET that transparently refreshes the 1-hour access token on 401. Null on failure. */
-    private fun getJson(url: String): JSONObject? = runCatching {
+    internal fun getJson(url: String): JSONObject? = runCatching {
         val token = tokenStore.spotifyAccessToken ?: return null
         val first = client.newCall(authed(url, token)).execute()
         val resp = if (first.code == 401) {
@@ -290,7 +290,7 @@ private fun JSONObject.firstArtist(): String {
     return if (artists != null && artists.length() > 0) artists.optJSONObject(0)?.optString("name").orEmpty() else ""
 }
 
-private fun JSONObject.toPlaylistTrack(): PlaylistTrack? {
+internal fun JSONObject.toPlaylistTrack(): PlaylistTrack? {
     val uri = optString("uri")
     if (!uri.startsWith("spotify:track:")) return null
     val images = optJSONObject("album")?.optJSONArray("images")
