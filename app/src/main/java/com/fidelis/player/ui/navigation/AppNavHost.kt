@@ -86,7 +86,7 @@ fun AppNavHost(
         popExitTransition = { fadeOut(tween(180)) },
     ) {
         composable(Dest.Playlists.route) {
-            PlaylistsScreen(onOpenPlaylist = { id -> nav.navigate("playlist/$id") }, onOpenPlayer = openPlayer)
+            PlaylistsScreen(onOpenPlaylist = { id -> nav.navigate("playlist/$id") }, onOpenPlayer = openPlayer, onOpenArtist = openArtist)
         }
         composable(Dest.Search.route) {
             SearchScreen(onOpenPlayer = openPlayer, onOpenArtist = openArtist, onOpenAlbum = openAlbum)
