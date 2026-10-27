@@ -2,9 +2,9 @@ package com.fidelis.player.integration.spotify
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
+import android.graphics. Bitmap
 import android.os.SystemClock
-import android.util. Log
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.fidelis.player.BuildConfig
 import com.fidelis.player.playback.PlaybackService
@@ -39,6 +39,7 @@ data class QueueEntry(val id: Long, val track: QueueTrack)
  */
 @Singleton
 class SpotifyRemote @Inject constructor() {
+
     data class Snapshot(
         val title: String, val artist: String, val isPaused: Boolean,
         val positionMs: Long, val durationMs: Long, val imageUri: String?, val uri: String?,
@@ -56,6 +57,8 @@ class SpotifyRemote @Inject constructor() {
     private val _state = MutableStateFlow<Snapshot?>(null); val state: StateFlow<Snapshot?> = _state.asStateFlow()
     private val _error = MutableStateFlow<String?>(null); val error: StateFlow<String?> = _error.asStateFlow()
     private val _artwork = MutableStateFlow<Bitmap?>(null); val artwork: StateFlow<Bitmap?> = _artwork.asStateFlow()
+    /** Whether the playing song is in your Spotify Liked Songs. */
+    private val _liked = MutableStateFlow(false); val liked: StateFlow<Boolean> = _liked.asStateFlow()
 
     /** Up next, in play order. Does not include the current song. */
     private val _queue = MutableStateFlow<List<QueueEntry>>(emptyList()); val queue: StateFlow<List<QueueEntry>> = _queue.asStateFlow()
@@ -70,6 +73,7 @@ class SpotifyRemote @Inject constructor() {
     private val stale = LinkedHashSet<String>()    // handed over, then made obsolete
     private var lastStateAt = 0L
     private var lastArtUri: String? = null
+    private var likedUri: String? = null
     private var ticker: Job? = null
 
     fun markConnecting() { _connecting.value = true; _error.value = null }
@@ -112,7 +116,24 @@ class SpotifyRemote @Inject constructor() {
             lastArtUri = t.imageUri.raw
             remote.imagesApi.getImage(t.imageUri).setResultCallback { bmp -> _artwork.value = bmp }
         }
+        if (t?.uri != null && t.uri != likedUri) refreshLiked(t.uri, remote)
         if (snap.uri != null) reconcile(snap)
+    }
+
+    private fun refreshLiked(uri: String, remote: SpotifyAppRemote) {
+        likedUri = uri
+        _liked.value = false
+        remote.userApi.getLibraryState(uri).setResultCallback { ls -> if (ls.uri == likedUri) _liked.value = ls.isAdded }
+    }
+
+    /** Saves the playing song to Liked Songs, or removes it. Rolls back if Spotify refuses. */
+    fun toggleLike() {
+        val uri = _state.value?.uri ?: return
+        val api = appRemote?.userApi ?: return
+        val now = !_liked.value
+        _liked.value = now
+        (if (now) api.addToLibrary(uri) else api.removeFromLibrary(uri))
+            .setErrorCallback { if (likedUri == uri) _liked.value = !now }
     }
 
     /** Keeps our model in step when the playing song changes. */
@@ -124,6 +145,7 @@ class SpotifyRemote @Inject constructor() {
         }
         val cur = _current.value
         if (cur != null && s.matches(cur)) return
+
         val handed = queuedNext
         when {
             // Natural hand-over to the song we queued.
