@@ -41,8 +41,8 @@ for s in listen player lyrics artist mood; do
   [ -s "$OUT/$s.png" ] || { echo "Missing $OUT/$s.png. Run tools/screenshots.sh without --banner-only."; exit 1; }
 done
 [ -x "$CHROME" ] || { echo "Google Chrome not found; the screenshots are saved, only the banner is skipped."; exit 1; }
-"$CHROME" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
-  --allow-file-access-from-files --window-size=2400,1260 \
+"$CHROME" --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --virtual-time-budget=6000 --no-first-run --user-data-dir="$(mktemp -d)" \
+  --allow-file-access-from-files --window-size=1280,720 \
   --screenshot="$PWD/$OUT/banner.png" "file://$PWD/tools/banner.html" >/dev/null 2>&1
 echo
 echo "Done: $OUT/banner.png and five screenshots."

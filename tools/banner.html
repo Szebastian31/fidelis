@@ -1,26 +1,79 @@
 <!doctype html>
-<!-- Five phones on the family sky. tools/screenshots.sh renders this to screenshots/banner.png. -->
-<html><head><meta charset="utf-8"><style>
-  html, body { margin: 0; width: 2400px; height: 1260px; overflow: hidden; }
-  body {
-    background:
-      radial-gradient(1100px 800px at 12% 4%, rgba(143,214,255,.30), transparent 70%),
-      radial-gradient(900px 700px at 92% 30%, rgba(185,168,255,.26), transparent 70%),
-      radial-gradient(1200px 700px at 42% 108%, rgba(255,159,180,.22), transparent 70%),
-      linear-gradient(180deg, #070D26 0%, #14215A 60%, #2B3D7E 100%);
-    display: flex; align-items: center; justify-content: center; gap: 56px;
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fidelis banner</title>
+<!-- The README banner: five real screens in phone frames. tools/screenshots.sh turns this page into screenshots/banner.png.
+     The colours follow the app's Night look; the five faint lines behind the phones are lyre strings (fides, the root of the name). -->
+<style>
+  :root{--top:#070d26;--mid:#14215a;--bot:#2b3d7e;--ink:#f2f5ff;--muted:rgba(242,245,255,.7)}
+  *{box-sizing:border-box;margin:0}
+  html,body{width:1280px;height:720px;overflow:hidden}
+  body{font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;position:relative;
+    background:radial-gradient(45% 60% at 10% 2%,rgba(143,214,255,.30),transparent 70%),radial-gradient(40% 55% at 92% 26%,rgba(185,168,255,.26),transparent 70%),
+      radial-gradient(55% 50% at 45% 108%,rgba(255,159,180,.22),transparent 70%),linear-gradient(180deg,var(--top),var(--mid) 60%,var(--bot))}
+  canvas{position:absolute;inset:0;width:1280px;height:720px}
+  header{position:absolute;left:0;right:0;top:44px;text-align:center;text-shadow:0 2px 18px rgba(5,8,30,.45)}
+  header .row{display:inline-flex;align-items:center;gap:16px}
+  header .ico{width:58px;height:58px;border-radius:16px;display:block;box-shadow:0 10px 24px -10px rgba(0,0,0,.6)}
+  h1{font-family:"SF Pro Display",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;font-weight:700;font-size:58px;letter-spacing:-2px;line-height:1}
+  header p{margin-top:12px;font-size:19px;font-weight:500;color:var(--muted)}
+  .phones{position:absolute;left:0;right:0;top:200px;height:640px}
+  .phone{position:absolute;top:0;width:250px;aspect-ratio:390/844;border-radius:42px;padding:9px;background:#05060c;
+    box-shadow:0 0 0 1.5px rgba(255,255,255,.18) inset,0 40px 70px -30px rgba(0,0,0,.75),0 0 0 1px rgba(0,0,0,.4)}
+  .phone img{display:block;width:100%;height:100%;border-radius:34px;object-fit:cover;object-position:top}
+  /* no painted notch: each screenshot already has the phone's cutout */
+  .p1{left:110px;transform:translateY(70px) rotate(-6deg)}
+  .p2{left:330px;transform:translateY(26px) rotate(-2.5deg)}
+  .p3{left:515px;z-index:3;box-shadow:0 0 0 1.5px rgba(255,255,255,.2) inset,0 40px 120px -20px rgba(143,124,255,.6),0 0 0 1px rgba(0,0,0,.4)}
+  .p4{left:700px;transform:translateY(26px) rotate(2.5deg)}
+  .p5{left:920px;transform:translateY(70px) rotate(6deg)}
+  .p2,.p4{z-index:2}
+</style>
+</head>
+<body>
+<canvas id="c" width="2560" height="1440"></canvas>
+<header>
+  <div class="row">
+    <svg class="ico" viewBox="0 0 64 64">
+      <defs><linearGradient id="fg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fd6ff"/><stop offset=".55" stop-color="#8f7cff"/><stop offset="1" stop-color="#ff9fb4"/></linearGradient></defs>
+      <rect width="64" height="64" rx="16" fill="#0d1440"/>
+      <path d="M19 15c-5 9-4 21 6 29M45 15c5 9 4 21-6 29" fill="none" stroke="url(#fg)" stroke-width="4" stroke-linecap="round"/>
+      <path d="M17 19h30" stroke="url(#fg)" stroke-width="3.5" stroke-linecap="round"/>
+      <g stroke="#eef1ff" stroke-width="1.4" opacity=".85"><path d="M26 20v24M30.7 20v24M35.3 20v24M40 20v24"/></g>
+      <rect x="23" y="43" width="18" height="5" rx="2.5" fill="url(#fg)"/>
+    </svg>
+    <h1>Fidelis</h1>
+  </div>
+  <p>A faithful companion for your Spotify: mood mixes, discoveries, lyrics and a queue that remembers.</p>
+</header>
+<div class="phones">
+  <div class="phone p1"><img src="../screenshots/listen.png" alt=""></div>
+  <div class="phone p2"><img src="../screenshots/artist.png" alt=""></div>
+  <div class="phone p3"><img src="../screenshots/player.png" alt=""></div>
+  <div class="phone p4"><img src="../screenshots/lyrics.png" alt=""></div>
+  <div class="phone p5"><img src="../screenshots/mood.png" alt=""></div>
+</div>
+<script>
+  // the same seeded stars and five lyre strings every time, so the banner only changes when the app does
+  const x = document.getElementById('c').getContext('2d'); x.scale(2, 2);
+  let s = 7; const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 180; i++) {
+    const px = r() * 1280, py = r() * 720, m = r();
+    x.globalAlpha = 0.15 + m * 0.5; x.fillStyle = m > 0.88 ? '#b9a8ff' : '#e8ecff';
+    x.beginPath(); x.arc(px, py, 0.4 + m * m * 1.4, 0, 7); x.fill();
   }
-  .phone {
-    width: 400px; height: 870px; border-radius: 58px; padding: 12px; background: #05060c;
-    box-shadow: 0 50px 110px rgba(0,0,0,.55), 0 0 0 2px rgba(255,255,255,.10), inset 0 0 0 1px rgba(255,255,255,.06);
+  x.globalAlpha = 1;
+  for (let k = 0; k < 5; k++) {
+    const g = x.createLinearGradient(0, 0, 1280, 0);
+    g.addColorStop(0, 'rgba(143,214,255,0)'); g.addColorStop(.5, `rgba(185,168,255,${.10 + k * .02})`); g.addColorStop(1, 'rgba(255,159,180,0)');
+    x.strokeStyle = g; x.lineWidth = 1.2; x.beginPath();
+    for (let px = 0; px <= 1280; px += 8) {
+      const py = 330 + k * 34 + Math.sin(px / 210 + k * .7) * (18 - k * 2);
+      px ? x.lineTo(px, py) : x.moveTo(px, py);
+    }
+    x.stroke();
   }
-  .phone img { width: 100%; height: 100%; border-radius: 46px; object-fit: cover; object-position: top; display: block; }
-  .mid { transform: scale(1.1); box-shadow: 0 60px 140px rgba(143,124,255,.45), 0 0 0 2px rgba(255,255,255,.14); }
-  .low { transform: translateY(46px); }
-</style></head><body>
-  <div class="phone low"><img src="../screenshots/listen.png"></div>
-  <div class="phone"><img src="../screenshots/artist.png"></div>
-  <div class="phone mid"><img src="../screenshots/player.png"></div>
-  <div class="phone"><img src="../screenshots/lyrics.png"></div>
-  <div class="phone low"><img src="../screenshots/mood.png"></div>
-</body></html>
+</script>
+</body>
+</html>
