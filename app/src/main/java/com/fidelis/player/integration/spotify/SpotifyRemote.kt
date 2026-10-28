@@ -325,6 +325,42 @@ class SpotifyRemote @Inject constructor() {
         goTo(prev, rememberCurrent = false)
     }
 
+    /** Spotify's own home sections (Recents, Made for you…), as the Spotify app shares them with car screens. */
+    suspend fun browse(parent: com.spotify.protocol.types.ListItem?, limit: Int = 30): List<com.spotify.protocol.types.ListItem> {
+        val api = appRemote?.contentApi ?: return emptyList()
+        val done = kotlinx.coroutines.CompletableDeferred<List<com.spotify.protocol.types.ListItem>>()
+        runCatching {
+            val call = if (parent == null) api.getRecommendedContentItems("default") else api.getChildrenOfItem(parent, limit, 0)
+            call.setResultCallback { r -> done.complete(r?.items?.filterNotNull().orEmpty()) }
+            call.setErrorCallback { done.complete(emptyList()) }
+        }.onFailure { done.complete(emptyList()) }
+        return kotlinx.coroutines.withTimeoutOrNull(8_000) { done.await() } ?: emptyList()
+    }
+
+    /** Cover art for anything Spotify shares, straight from the Spotify app. */
+    suspend fun image(uri: com.spotify.protocol.types.ImageUri): Bitmap? {
+        val api = appRemote?.imagesApi ?: return null
+        val done = kotlinx.coroutines.CompletableDeferred<Bitmap?>()
+        runCatching {
+            val call = api.getImage(uri, com.spotify.protocol.types.Image.Dimension.MEDIUM)
+            call.setResultCallback { done.complete(it) }
+            call.setErrorCallback { done.complete(null) }
+        }.onFailure { done.complete(null) }
+        return kotlinx.coroutines.withTimeoutOrNull(8_000) { done.await() }
+    }
+
+    /** Plays something from Spotify's home sections. Clears Up next, like any other playlist or album. */
+    fun playItem(item: com.spotify.protocol.types.ListItem) {
+        val uri = item.uri
+        if (uri != null && uri.startsWith("spotify:")) { playContext(uri); return }
+        pushHistory(_current.value)
+        _queue.value = emptyList()
+        invalidateHandOver()
+        expecting = null; _current.value = null
+        appRemote?.contentApi?.playContentItem(item)
+        ensureService()
+    }
+
     fun resume() { appRemote?.playerApi?.resume() }
     fun pause() { appRemote?.playerApi?.pause() }
     fun seekTo(ms: Long) { appRemote?.playerApi?.seekTo(ms) }
