@@ -361,6 +361,22 @@ class SpotifyRemote @Inject constructor() {
         ensureService()
     }
 
+    /**
+     * Plays a Spotify mix or album with its songs in Up next, so it can be reordered like any playlist.
+     * If the Spotify app won't share the songs, it plays the whole thing as before.
+     */
+    fun playWithQueue(item: com.spotify.protocol.types.ListItem) {
+        scope.launch {
+            val songs = (kotlinx.coroutines.withTimeoutOrNull(3_000) { browse(item, 100) } ?: emptyList())
+                .filter { it.uri.orEmpty().startsWith("spotify:track:") }
+                .map { QueueTrack(it.uri, it.title.orEmpty(), it.subtitle.orEmpty()) }
+            if (songs.size >= 2) playQueue(songs) else playItem(item)
+        }
+    }
+
+    fun playUriWithQueue(uri: String) =
+        playWithQueue(com.spotify.protocol.types.ListItem(uri, uri, null, "", "", true, true))
+
     fun resume() { appRemote?.playerApi?.resume() }
     fun pause() { appRemote?.playerApi?.pause() }
     fun seekTo(ms: Long) { appRemote?.playerApi?.seekTo(ms) }

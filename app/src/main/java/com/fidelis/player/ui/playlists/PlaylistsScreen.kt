@@ -4,6 +4,20 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -62,6 +76,12 @@ fun PlaylistsScreen(
     val snap by vm.nowPlaying.collectAsState()
     val context = LocalContext.current
     val home = vm.home
+    val pinned by vm.pinned.collectAsState()
+    val mine = remember(vm.playlists, pinned) { vm.ordered(pinned) }
+    // "Your playlists" shows just your library; back returns to For you.
+    var libraryOnly by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = libraryOnly) { libraryOnly = false }
+    var sheetFor by remember { mutableStateOf<SpotifyPlaylist?>(null) }
     val full: (LazyGridItemSpanScope) -> GridItemSpan = { GridItemSpan(it.maxLineSpan) }
     val play: (ListItem) -> Unit = { vm.playItem(it); onOpenPlayer() }
     // Albums, artists, Liked Songs and your own playlists open in Fidelis; everything else plays.
@@ -79,6 +99,16 @@ fun PlaylistsScreen(
     LaunchedEffect(connected) { if (connected) vm.refresh() }
 
     FidelisBackground {
+        sheetFor?.let { p ->
+            TrackSheet(
+                title = p.name, subtitle = "", imageUrl = p.imageUrl,
+                actions = listOf(
+                    SheetAction(if (p.id in pinned) "Unpin" else "Pin to top", Icons.Rounded.PushPin) { vm.togglePin(p.id) },
+                    SheetAction("Open playlist", Icons.AutoMirrored.Rounded.QueueMusic) { onOpenPlaylist(p.id) },
+                ),
+                onDismiss = { sheetFor = null },
+            )
+        }
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             modifier = Modifier.fillMaxSize(),
@@ -103,6 +133,36 @@ fun PlaylistsScreen(
                 return@LazyVerticalGrid
             }
 
+        item(span = full, key = "tabs") {
+            Row(Modifier.padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FidelisChip("For you", !libraryOnly, { libraryOnly = false })
+                FidelisChip("Your playlists", libraryOnly, { libraryOnly = true })
+            }
+        }
+        if (libraryOnly) {
+            item(key = LIKED_PLAYLIST_ID) { LikedTile(vm.likedCount) { onOpenPlaylist(LIKED_PLAYLIST_ID) } }
+            items(mine, key = { it.id }) { p -> PlaylistTile(p, p.id in pinned, { onOpenPlaylist(p.id) }, { sheetFor = p }) }
+            item(span = full, key = "hint") {
+                Text("Hold a playlist to pin it to the top.", color = Fidelis.inkFaint,
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+            }
+            return@LazyVerticalGrid
+        }
+        if (mine.isNotEmpty()) {
+            item(span = full, key = "mine") {
+                Column {
+                    RowTitle("Your playlists", if (pinned.isEmpty()) "Hold one to pin it here" else "Pinned first")
+                    LazyRow(Modifier.bleed(EDGE), contentPadding = PaddingValues(horizontal = EDGE),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        item(key = "m-liked") { Box(Modifier.width(112.dp)) { LikedTile(vm.likedCount) { onOpenPlaylist(LIKED_PLAYLIST_ID) } } }
+                        items(mine.take(20), key = { "m-${it.id}" }) { p ->
+                            Box(Modifier.width(112.dp)) { PlaylistTile(p, p.id in pinned, { onOpenPlaylist(p.id) }, { sheetFor = p }) }
+                        }
+                        item(key = "m-all") { SeeAllTile { libraryOnly = true } }
+                    }
+                }
+            }
+        }
             item(span = full, key = "made") {
                 Column {
                     RowTitle("Made for you", "Spotify's own mixes, plus the DJ")
@@ -182,7 +242,7 @@ fun PlaylistsScreen(
                 }
             }
 
-            item(span = full, key = "yp") { RowTitle("Your playlists", null) }
+            item(span = full, key = "yp") { RowTitle("All your playlists", null) }
             item(key = LIKED_PLAYLIST_ID) { LikedTile(vm.likedCount) { onOpenPlaylist(LIKED_PLAYLIST_ID) } }
             when {
                 vm.loading && vm.playlists.isEmpty() -> items(8) {
@@ -199,7 +259,7 @@ fun PlaylistsScreen(
                         actionLabel = "Try again", onAction = { vm.refresh() },
                     )
                 }
-                else -> items(vm.playlists, key = { it.id }) { p -> PlaylistTile(p) { onOpenPlaylist(p.id) } }
+                else -> items(mine, key = { it.id }) { p -> PlaylistTile(p, p.id in pinned, { onOpenPlaylist(p.id) }, { sheetFor = p }) }
             }
         }
     }
@@ -338,9 +398,9 @@ private fun LikedTile(count: Int, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PlaylistTile(p: SpotifyPlaylist, onClick: () -> Unit) {
+private fun PlaylistTile(p: SpotifyPlaylist, pinned: Boolean, onClick: () -> Unit, onHold: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
-    Column(Modifier.pressable(onClick = onClick)) {
+    Column(Modifier.holdable(onClick, onHold)) {
         Box(
             Modifier.fillMaxWidth().aspectRatio(1f).shadow(10.dp, shape).clip(shape).background(Fidelis.glass),
             contentAlignment = Alignment.Center,
@@ -348,12 +408,43 @@ private fun PlaylistTile(p: SpotifyPlaylist, onClick: () -> Unit) {
             if (p.imageUrl != null) {
                 AsyncImage(p.imageUrl, p.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             } else {
-                Icon(Icons.Rounded.MusicNote, null, tint = Fidelis.inkFaint, modifier = Modifier.size(28.dp))
+                Icon(Icons.Rounded. MusicNote, null, tint = Fidelis.inkFaint, modifier = Modifier.size(28.dp))
             }
+            if (pinned) Box(
+                Modifier.align(Alignment.TopEnd).padding(6.dp).size(24.dp).clip(CircleShape).background(Fidelis.accent),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.PushPin, "Pinned", tint = Fidelis.ink, modifier = Modifier.size(13.dp)) }
         }
         Spacer(Modifier.height(8.dp))
         Text(p.name, color = Fidelis.ink, style = MaterialTheme.typography.labelLarge,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (p.trackCount > 0) Text("${p.trackCount} songs", color = Fidelis.inkMute, style = MaterialTheme.typography.labelSmall)
     }
+}
+
+/** Last tile of the playlists row: opens the full library view. */
+@Composable
+private fun SeeAllTile(onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(Modifier.width(112.dp).pressable(onClick = onClick)) {
+        Box(Modifier.size(112.dp).clip(shape).background(Fidelis.glassStrong), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.ChevronRight, null, tint = Fidelis.ink, modifier = Modifier.size(32.dp))
+        }
+        Spacer(Modifier.height(8.dp))
+        Text("See all", color = Fidelis.ink, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+/** Tap to open, hold for options. Same gentle press as pressable, plus a buzz on hold. */
+@OptIn(ExperimentalFoundationApi::class)
+private fun Modifier.holdable(onClick: () -> Unit, onHold: () -> Unit): Modifier = composed {
+    val haptic = LocalHapticFeedback.current
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.96f else 1f, label = "hold")
+    graphicsLayer { scaleX = scale; scaleY = scale }
+        .combinedClickable(
+            interactionSource = source, indication = null, onClick = onClick,
+            onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onHold() },
+        )
 }

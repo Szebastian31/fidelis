@@ -31,6 +31,7 @@ class PlaylistsViewModel @Inject constructor(
     private val remote: SpotifyRemote,
     private val feed: HomeFeed,
     val spotifyHome: SpotifyHome,
+    private val pins: PlaylistPins,
 ) : ViewModel() {
     val connected = repo.connected
     val nowPlaying = remote.state
@@ -81,9 +82,15 @@ class PlaylistsViewModel @Inject constructor(
         if (index in list.indices) remote.playQueue(list.map { it.toQueue() }, index)
     }
 
-    fun playItem(item: ListItem) = remote.playItem(item)
-    fun playDj() = remote.playContext(SpotifyHome.DJ_URI)
+    fun playItem(item: ListItem) = remote.playWithQueue(item)
+    fun playDj() = remote.playUriWithQueue(SpotifyHome.DJ_URI)
     fun ownsPlaylist(id: String) = playlists.any { it.id == id }
+
+    val pinned = pins.ids
+    fun togglePin(id: String) = pins.toggle(id)
+    /** Your playlists with pinned ones first, in pin order. */
+    fun ordered(pinnedIds: List<String>) =
+        playlists.sortedBy { p -> pinnedIds.indexOf(p.id).let { if (it < 0) Int.MAX_VALUE else it } }
 
     fun authUrl(): String = repo.authUrl()
 }
