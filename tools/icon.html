@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fidelis icon</title>
+<!-- The Fidelis icon (Moon record, Aurora): a silver record that doubles as a full moon, a glass tonearm and a cream heart on the label,
+     under green and violet aurora. Drawn on Kalendae's 1024 grid with the family's glass, silver and stars.
+     tools/icon.sh renders it: ?mode=round for icons/ and the banner, ?mode=full for the Android adaptive icon (full bleed, art inside the safe zone). -->
+<style>html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden}svg{display:block;width:100vw;height:100vh}</style>
+</head>
+<body>
+<script>
+const full = new URLSearchParams(location.search).get('mode') === 'full';
+const HEART = 'M0 34 C -26 16, -46 0, -46 -18 C -46 -33, -35 -43, -22 -43 C -12 -43, -4 -37, 0 -29 C 4 -37, 12 -43, 22 -43 C 35 -43, 46 -33, 46 -18 C 46 0, 26 16, 0 34 Z';
+const ARM = 'M806 214 L700 520 L640 610';
+const stars = [[150,110,4.5],[880,120,5],[930,300,3],[90,360,3],[720,70,3],[300,70,3]]
+  .map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#fff" opacity=".8"/>`).join('');
+const grooves = [256, 222, 190, 158]
+  .map((r, i) => `<circle cx="488" cy="560" r="${r}" fill="none" stroke="#5d6a88" stroke-opacity="${.32 - i * .04}" stroke-width="5" stroke-dasharray="${i % 2 ? '3 11' : 'none'}"/>`).join('');
+// in full mode the record and tonearm shrink into the adaptive icon's safe zone; the sky still fills the square
+const fit = full ? 'transform="translate(512 512) scale(.64) translate(-512 -512)"' : '';
+
+document.body.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#03101c"/><stop offset=".55" stop-color="#0a2836"/><stop offset="1" stop-color="#123c4a"/></linearGradient>
+  <linearGradient id="a1" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5ef2c2" stop-opacity="0"/><stop offset=".35" stop-color="#5ef2c2" stop-opacity=".75"/><stop offset=".75" stop-color="#7fd6ff" stop-opacity=".5"/><stop offset="1" stop-color="#9b7cff" stop-opacity="0"/></linearGradient>
+  <linearGradient id="a2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#9b7cff" stop-opacity="0"/><stop offset=".5" stop-color="#b48cff" stop-opacity=".55"/><stop offset="1" stop-color="#5ef2c2" stop-opacity="0"/></linearGradient>
+  <linearGradient id="lab" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#06202c"/><stop offset="1" stop-color="#0f3a48"/></linearGradient>
+  <radialGradient id="sil" cx=".38" cy=".28" r=".85"><stop offset="0" stop-color="#fff" stop-opacity=".97"/><stop offset=".45" stop-color="#dfe6f2" stop-opacity=".85"/><stop offset="1" stop-color="#8f9bb3" stop-opacity=".7"/></radialGradient>
+  <linearGradient id="silL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#dfe6f2"/><stop offset="1" stop-color="#9aa6bf"/></linearGradient>
+  <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".34"/><stop offset=".55" stop-color="#fff" stop-opacity=".1"/><stop offset="1" stop-color="#bfe6ff" stop-opacity=".16"/></linearGradient>
+  <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".5" stop-color="#fff" stop-opacity=".25"/><stop offset="1" stop-color="#fff" stop-opacity=".55"/></linearGradient>
+  <filter id="ab" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="30"/></filter>
+  <filter id="blur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="16"/></filter>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter>
+  <clipPath id="clip"><rect width="1024" height="1024" rx="${full ? 0 : 228}"/></clipPath>
+</defs>
+<g clip-path="url(#clip)">
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <path d="M-40 300 C 180 120, 380 330, 600 190 S 900 60, 1080 170" fill="none" stroke="url(#a1)" stroke-width="120" filter="url(#ab)"/>
+  <path d="M-40 420 C 220 300, 420 470, 660 330 S 960 260, 1080 320" fill="none" stroke="url(#a2)" stroke-width="80" filter="url(#ab)"/>
+  <path d="M-40 300 C 180 120, 380 330, 600 190 S 900 60, 1080 170" fill="none" stroke="#c9ffe9" stroke-opacity=".25" stroke-width="6" filter="url(#glow)"/>
+  ${stars}
+  <g ${fit}>
+    <circle cx="488" cy="560" r="330" fill="#e6eeff" opacity=".16" filter="url(#glow)"/>
+    <circle cx="488" cy="586" r="290" fill="#030616" opacity=".4" filter="url(#blur)"/>
+    <circle cx="488" cy="560" r="290" fill="url(#sil)" stroke="#fff" stroke-opacity=".75" stroke-width="5"/>
+    ${grooves}
+    <path d="M300 420 A 240 240 0 0 1 520 322" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="488" cy="560" r="104" fill="url(#lab)"/>
+    <circle cx="488" cy="560" r="104" fill="url(#glass)"/>
+    <circle cx="488" cy="560" r="104" fill="none" stroke="url(#edge)" stroke-width="5"/>
+    <path d="${HEART}" transform="translate(488 562) scale(1.2)" fill="#fff1e6" opacity=".55" filter="url(#glow)"/>
+    <path d="${HEART}" transform="translate(488 562) scale(1.08)" fill="#fff1e6"/>
+    <path d="M-30 -22 C -30 -32, -20 -36, -12 -32" transform="translate(488 562) scale(1.08)" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="6" stroke-linecap="round"/>
+    <path d="${ARM}" fill="none" stroke="#030616" stroke-opacity=".45" stroke-width="54" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 22)" filter="url(#blur)"/>
+    <path d="${ARM}" fill="none" stroke="#fff" stroke-opacity=".22" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="${ARM}" fill="none" stroke="url(#edge)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" transform="translate(-16 -4)"/>
+    <rect x="602" y="586" width="80" height="54" rx="16" fill="url(#silL)" transform="rotate(34 642 613)"/>
+    <circle cx="806" cy="214" r="62" fill="url(#glass)" stroke="url(#edge)" stroke-width="6"/>
+    <circle cx="806" cy="214" r="26" fill="url(#sil)" stroke="#fff" stroke-opacity=".7" stroke-width="3"/>
+  </g>
+</g>
+</svg>`;
+</script>
+</body>
+</html>
