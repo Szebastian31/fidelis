@@ -231,7 +231,7 @@ fun TrackRow(
 
 /** Floating now-playing pill, tinted by the album art, with a thin live progress line. */
 @Composable
-fun MiniPlayer(
+fun MiniPlayerPill(
     snap: SpotifyRemote.Snapshot, art: Bitmap?, onOpen: () -> Unit, onToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -239,9 +239,9 @@ fun MiniPlayer(
     val tint = rememberArtTint(art)
     val glow = tint ?: Fidelis.purple
     val fill = lerp(Fidelis.bg1, tint ?: Fidelis.bg1, 0.3f)
-    var position by remember(snap) { mutableLongStateOf(snap.positionMs) }
+    var position by remember(snap) { mutableLongStateOf(snap.livePosition()) }
     LaunchedEffect(snap) {
-        if (!snap.isPaused) while (true) { delay(1000); position = (position + 1000).coerceAtMost(snap.durationMs) }
+        if (!snap.isPaused) while (true) { delay(500); position = snap.livePosition() }
     }
     val progress = if (snap.durationMs > 0) (position.toFloat() / snap.durationMs).coerceIn(0f, 1f) else 0f
     Box(
@@ -299,4 +299,16 @@ fun SkeletonBox(modifier: Modifier = Modifier, radius: Dp = 14.dp) {
     val t = rememberInfiniteTransition(label = "skeleton")
     val a by t.animateFloat(0.05f, 0.14f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "alpha")
     Box(modifier.clip(RoundedCornerShape(radius)).background(Color.White.copy(alpha = a)))
+}
+
+/** True when the app shows one shared mini player above the tab bar; screens then skip their own. */
+val LocalAppMini = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+@Composable
+fun MiniPlayer(
+    snap: SpotifyRemote.Snapshot, art: Bitmap?, onOpen: () -> Unit, onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (LocalAppMini.current) return
+    MiniPlayerPill(snap, art, onOpen, onToggle, modifier)
 }

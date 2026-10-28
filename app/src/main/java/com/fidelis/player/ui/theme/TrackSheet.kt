@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons. Icons
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -14,20 +17,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout. ContentScale
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 
 data class SheetAction(val label: String, val icon: ImageVector, val onClick: () -> Unit)
 
-/** Bottom sheet with a song header and a list of actions. */
+/** Bottom sheet with a song header and a list of actions, plus song radio and "Go to artist". */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrackSheet(
     title: String, subtitle: String, imageUrl: String?,
     actions: List<SheetAction>, onDismiss: () -> Unit,
 ) {
+    val all = actions + radioActions(title, subtitle)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = Fidelis.bg1,
@@ -50,7 +54,7 @@ fun TrackSheet(
             }
         }
         Box(Modifier.fillMaxWidth().padding(vertical = 8.dp).height(1.dp).background(Fidelis.line))
-        actions.forEach { a ->
+        all.forEach { a ->
             Row(
                 Modifier.fillMaxWidth().pressable { a.onClick(); onDismiss() }
                     .padding(horizontal = 20.dp, vertical = 14.dp),
@@ -63,4 +67,14 @@ fun TrackSheet(
         }
         Spacer(Modifier.navigationBarsPadding().height(12.dp))
     }
+}
+
+@Composable
+private fun radioActions(title: String, artist: String): List<SheetAction> {
+    val t = LocalTrackActions.current ?: return emptyList()
+    if (artist.isBlank()) return emptyList()
+    return listOf(
+        SheetAction("Start song radio", Icons.Rounded.Radio) { t.songRadio(title, artist) },
+        SheetAction("Go to $artist", Icons.Rounded.Person) { t.openArtist(artist) },
+    )
 }

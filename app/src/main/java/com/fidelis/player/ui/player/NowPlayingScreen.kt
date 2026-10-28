@@ -103,17 +103,19 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val list = rememberLazyListState()
+    val actions = LocalTrackActions.current
 
     // One colour from the cover washes the whole player; the look's accent if the cover is grey.
     val wash by animateColorAsState(rememberArtTint(art) ?: Fidelis.purple, tween(700), label = "wash")
     val base = lerp(Color.Black, wash, 0.26f)
 
     val duration = snap?.durationMs ?: 0L
-    var position by remember(snap) { mutableLongStateOf(snap?.positionMs ?: 0L) }
+    var position by remember(snap) { mutableLongStateOf(snap?.livePosition() ?: 0L) }
     var scrubbing by remember { mutableStateOf(false) }
+    var seekAt by remember { mutableLongStateOf(0L) } // just seeked: hold the bar until Spotify catches up
     LaunchedEffect(snap) {
         if (snap?.isPaused == false) while (true) {
-            delay(500); if (!scrubbing) position = (position + 500).coerceAtMost(duration)
+            delay(250); if (!scrubbing && android.os.SystemClock.elapsedRealtime() - seekAt > 1500) position = snap?.livePosition() ?: 0L
         }
     }
 
@@ -170,7 +172,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                 .nestedScroll(sheet)
                 .background(base),
         ) {
-            LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(bottom = 32.dp)) {
+            LazyColumn(Modifier.fillMaxSize(), state = list) {
                 item {
                     Hero(
                         modifier = Modifier.fillParentMaxSize(),
@@ -179,16 +181,18 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                         onClose = close, onToggleLike = vm::toggleLike,
                         onPrev = vm::prev, onToggle = vm::togglePlay, onNext = vm::next,
                         onScrub = { f -> scrubbing = true; position = (f * duration).toLong() },
-                        onScrubEnd = { vm.seekTo(position); scrubbing = false },
+                        onScrubEnd = { vm.seekTo(position); seekAt = android.os.SystemClock.elapsedRealtime(); scrubbing = false },
                         onLyrics = { showLyrics = true },
                         onShuffle = vm::reshuffle,
+                        onArtist = { snap?.artist?.takeIf { it.isNotBlank() }?.let { a -> actions?.openArtist(a) } },
+                        onRadio = { snap?.let { s -> actions?.songRadio(s.title, s.artist) } },
                         onQueue = { scope.launch { list.animateScrollToItem(1) } },
                     )
                 }
                 item {
                     Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 20.dp, top = 20.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (queue.isEmpty()) "UP NEXT" else "UP NEXT · ${queue.size}",
+                        Text(if (queue.isEmpty()) "UP NEXT" else "UP NEXT · ${queue.size}" + queue.sumOf { it.track.durationMs }.let { if (it > 0) " · " + formatTotal(it).uppercase() else "" },
                             color = Fidelis.inkMute, style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.weight(1f))
                         if (queue.size > 1) FidelisChip("Shuffle", false, vm::reshuffle)
@@ -236,6 +240,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                             onClick = { vm.playNow(t) })
                     }
                 }
+                item { Spacer(Modifier.navigationBarsPadding().height(32.dp)) }
             }
         }
 
@@ -245,7 +250,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
             exit = fadeOut(tween(200)) + slideOutVertically(tween(260)) { it / 8 },
         ) {
             LyricsView(lyrics, position, art, wash,
-                onSeek = { ms -> position = ms; vm.seekTo(ms) },
+                onSeek = { ms -> position = ms; seekAt = android.os.SystemClock.elapsedRealtime(); vm.seekTo(ms) },
                 onClose = { showLyrics = false })
         }
     }
@@ -284,7 +289,7 @@ private fun LyricsView(
                 Color.White.copy(alpha = 0.07f), strokeWidth = 2.5f)
         }
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconCircle(Icons.Rounded.Close, "Close lyrics", onClick = onClose)
                 Spacer(Modifier.weight(1f))
                 Box(Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(Fidelis.glass)) {
@@ -299,7 +304,7 @@ private fun LyricsView(
                 is Lyrics.Synced -> SyncedLyrics(lyrics.lines, positionMs, onSeek)
             }
             Text("Lyrics from LRCLIB", color = Fidelis.inkFaint, style = MaterialTheme.typography.labelSmall,
-                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp))
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 14.dp))
         }
     }
 }
@@ -373,6 +378,9 @@ private fun QueueRow(
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(e.track.artist, color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (e.track.durationMs > 0) {
+            Text(formatDuration(e.track.durationMs), color = Fidelis.inkFaint, style = MaterialTheme.typography.labelMedium)
         }
         Box(Modifier.size(40.dp).pressable(onClick = onMore), contentAlignment = Alignment.Center) {
             Icon(Icons.Rounded.MoreVert, "More", tint = Fidelis.inkMute, modifier = Modifier.size(20.dp))

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.Icon
@@ -32,20 +33,23 @@ fun PlaylistDetailScreen(
     vm: PlaylistDetailViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
+    val actions = LocalTrackActions.current
     val snap by vm.nowPlaying.collectAsState()
     val p = vm.playlist
     val tracks = vm.tracks
     var menuFor by remember { mutableStateOf<Pair<Int, PlaylistTrack>?>(null) }
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+    val label = if (vm.isLiked) "your Liked Songs" else p?.name ?: "this playlist"
 
     FidelisBackground {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
             item {
                 val count = if (tracks.isNotEmpty()) tracks.size else p?.trackCount ?: 0
+                val total = tracks.sumOf { it.durationMs }
                 DetailHeader(
                     eyebrow = if (vm.isLiked) "Your library" else "Playlist",
                     title = if (vm.isLiked) "Liked Songs" else p?.name ?: "Playlist",
-                    meta = if (count > 0) "$count songs" else null,
+                    meta = if (count > 0) listOfNotNull("$count songs", total.takeIf { it > 0 }?.let(::formatTotal)).joinToString(" · ") else null,
                     backdropUrl = if (vm.isLiked) null else p?.imageUrl,
                     onBack = onBack,
                     cover = {
@@ -66,11 +70,13 @@ fun PlaylistDetailScreen(
                         },
                         modifier = Modifier.weight(1f),
                     )
-                    SoftButton(
-                        text = "Shuffle", icon = Icons. Rounded.Shuffle, enabled = tracks.isNotEmpty(),
-                        onClick = { vm.shuffle(); onOpenPlayer() }, modifier = Modifier.weight(1f),
-                    )
                     if (tracks.isNotEmpty()) {
+                        IconCircle(Icons.Rounded.Shuffle, "Shuffle", size = 52.dp,
+                            onClick = { vm.shuffle(); onOpenPlayer() })
+                        actions?.let { a ->
+                            IconCircle(Icons.Rounded.Radio, "Play similar songs", size = 52.dp,
+                                onClick = { a.similarTo(tracks, label) })
+                        }
                         IconCircle(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add all to queue", size = 52.dp,
                             onClick = { vm.addAllToQueue(); toast("Added ${tracks.size} songs to queue") })
                     }
@@ -109,7 +115,7 @@ fun PlaylistDetailScreen(
                 else -> itemsIndexed(tracks, key = { i, t -> "$i-${t.uri}" }) { i, t ->
                     SongRow(
                         title = t.title, subtitle = t.artist, imageUrl = t.imageUrl,
-                        highlighted = t.uri == snap?.uri,
+                        highlighted = t.uri == snap?.uri, duration = t.durationMs,
                         onClick = { vm.playFrom(i); onOpenPlayer() },
                         onMore = { menuFor = i to t },
                     )

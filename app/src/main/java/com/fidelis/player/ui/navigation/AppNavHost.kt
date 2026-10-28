@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.ui.catalog.AlbumScreen
 import com.fidelis.player.ui.catalog.ArtistScreen
 import com.fidelis.player.ui.mood.MixDetailScreen
@@ -41,6 +43,7 @@ import com.fidelis.player.ui.playlists.PlaylistsScreen
 import com.fidelis.player.ui.profile.ProfileScreen
 import com.fidelis.player.ui.search.SearchScreen
 import com.fidelis.player.ui.theme.Fidelis
+import com.fidelis.player.ui.theme.MiniPlayerPill
 import com.fidelis.player.ui.theme.Skin
 import com.fidelis.player.ui.theme.pressable
 
@@ -51,7 +54,7 @@ private enum class Dest(val route: String, val label: String, val icon: ImageVec
     Profile("profile", "Profile", Icons.Rounded.Person),
 }
 
-private const val PLAYER = "nowplaying"
+const val PLAYER = "nowplaying"
 private const val DETAIL = "playlist/{playlistId}"
 private const val MIX = "mix/{mixId}"
 private const val ARTIST = "artist/{artistId}"
@@ -67,16 +70,24 @@ private val pageIn: AnimatedContentTransitionScope<NavBackStackEntry>.() -> Ente
 private val pageOut: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition =
     { slideOutHorizontally(tween(260)) { it / 3 } + fadeOut(tween(200)) }
 
+/** Screens sit inside the system bars and above the mini player; the player runs edge to edge. */
+@Composable
+private fun Pad(p: PaddingValues, content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().padding(p)) { content() }
+}
+
 @Composable
 fun AppNavHost(
     nav: NavHostController,
     currentSkin: Skin,
     onSkinChange: (Skin) -> Unit,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(),
 ) {
     val openPlayer = { nav.navigate(PLAYER) { launchSingleTop = true } }
     val openArtist = { id: String -> nav.navigate("artist/$id") }
     val openAlbum = { id: String -> nav.navigate("album/$id") }
+    val p = contentPadding
     NavHost(
         nav, startDestination = Dest.Playlists.route, modifier = modifier,
         // Defaults: soft cross-fade. Screens under the player stay put while it slides.
@@ -86,26 +97,26 @@ fun AppNavHost(
         popExitTransition = { fadeOut(tween(180)) },
     ) {
         composable(Dest.Playlists.route) {
-            PlaylistsScreen(onOpenPlaylist = { id -> nav.navigate("playlist/$id") }, onOpenPlayer = openPlayer, onOpenArtist = openArtist)
+            Pad(p) { PlaylistsScreen(onOpenPlaylist = { id -> nav.navigate("playlist/$id") }, onOpenPlayer = openPlayer, onOpenArtist = openArtist) }
         }
         composable(Dest.Search.route) {
-            SearchScreen(onOpenPlayer = openPlayer, onOpenArtist = openArtist, onOpenAlbum = openAlbum)
+            Pad(p) { SearchScreen(onOpenPlayer = openPlayer, onOpenArtist = openArtist, onOpenAlbum = openAlbum) }
         }
         composable(Dest.Mood.route) {
-            MoodScreen(onOpenPlayer = openPlayer, onOpenMix = { id -> nav.navigate("mix/$id") { launchSingleTop = true } })
+            Pad(p) { MoodScreen(onOpenPlayer = openPlayer, onOpenMix = { id -> nav.navigate("mix/$id") { launchSingleTop = true } }) }
         }
-        composable(Dest.Profile.route) { ProfileScreen(currentSkin, onSkinChange) }
+        composable(Dest.Profile.route) { Pad(p) { ProfileScreen(currentSkin, onSkinChange) } }
         composable(DETAIL, enterTransition = pageIn, popExitTransition = pageOut) {
-            PlaylistDetailScreen(onBack = { nav.popBackStack() }, onOpenPlayer = openPlayer)
+            Pad(p) { PlaylistDetailScreen(onBack = { nav.popBackStack() }, onOpenPlayer = openPlayer) }
         }
         composable(MIX, enterTransition = pageIn, popExitTransition = pageOut) {
-            MixDetailScreen(onBack = { nav.popBackStack() }, onOpenPlayer = openPlayer)
+            Pad(p) { MixDetailScreen(onBack = { nav.popBackStack() }, onOpenPlayer = openPlayer) }
         }
         composable(ARTIST, enterTransition = pageIn, popExitTransition = pageOut) {
-            ArtistScreen(onBack = { nav.popBackStack() }, onOpenAlbum = openAlbum, onOpenPlayer = openPlayer)
+            Pad(p) { ArtistScreen(onBack = { nav.popBackStack() }, onOpenAlbum = openAlbum, onOpenPlayer = openPlayer) }
         }
         composable(ALBUM, enterTransition = pageIn, popExitTransition = pageOut) {
-            AlbumScreen(onBack = { nav.popBackStack() }, onOpenArtist = openArtist, onOpenPlayer = openPlayer)
+            Pad(p) { AlbumScreen(onBack = { nav.popBackStack() }, onOpenArtist = openArtist, onOpenPlayer = openPlayer) }
         }
         composable(
             PLAYER,
@@ -115,6 +126,32 @@ fun AppNavHost(
         ) {
             NowPlayingScreen(onBack = { nav.popBackStack() })
         }
+    }
+}
+
+/** Everything under the screens: the shared mini player, then the tab bar. Both hide on the player. */
+@Composable
+fun AppChrome(nav: NavHostController, remote: SpotifyRemote) {
+    val entry by nav.currentBackStackEntryAsState()
+    val route = entry?.destination?.route
+    val snap by remote.state.collectAsState()
+    val art by remote.artwork.collectAsState()
+    Column {
+        AnimatedVisibility(
+            visible = route != PLAYER && snap?.title?.isNotBlank() == true,
+            enter = slideInVertically(tween(320)) { it } + fadeIn(tween(260)),
+            exit = slideOutVertically(tween(260)) { it } + fadeOut(tween(200)),
+        ) {
+            snap?.let { s ->
+                MiniPlayerPill(
+                    s, art,
+                    onOpen = { nav.navigate(PLAYER) { launchSingleTop = true } },
+                    onToggle = { if (s.isPaused) remote.resume() else remote.pause() },
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp),
+                )
+            }
+        }
+        BottomBar(nav)
     }
 }
 
