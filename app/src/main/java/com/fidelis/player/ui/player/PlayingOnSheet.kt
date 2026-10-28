@@ -190,7 +190,7 @@ private fun DeviceRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp))
-            .background(if (highlighted) Fidelis.accent else Fidelis.glass), contentAlignment = Alignment.Center) {
+            .then(if (highlighted) Modifier.background(Fidelis.accent) else Modifier.background(Fidelis.glass)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Fidelis.ink, modifier = Modifier.size(22.dp))
         }
         Spacer(Modifier.width(14.dp))
