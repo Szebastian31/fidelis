@@ -1,6 +1,6 @@
 package com.fidelis.player.audio
 
-import android.content. Context
+import android.content.Context
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.ln
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -28,8 +29,31 @@ enum class SoundPreset(val label: String, val gains: List<Float>) {
     BASS("Bass", listOf(5f, 4.5f, 3.5f, 1.5f, 0f, 0f, 0f, 0f, 0f, 0f)),
     VOCAL("Vocal", listOf(-2f, -1.5f, -1f, 0f, 1f, 2f, 3f, 2f, 0f, -1f)),
     LATE_NIGHT("Late night", listOf(-3f, -2f, -1f, 0f, 0.5f, 1f, 1f, 0f, -1.5f, -3f)),
-    FREEBUDS_PRO_4("FreeBuds Pro 4", listOf(-2.5f, -2f, -1f, -0.5f, 0f, 0f, 1f, 2f, 1f, -0.5f)),
     CUSTOM("Custom", List(10) { 0f }),
+}
+
+/**
+ * Measured corrections for the FreeBuds Pro 4: AutoEq's fit of Regan Cipher's measurements
+ * (published through OPRA, CC BY-SA 4.0). They even out the earbuds' own tuning; your EQ sits on top.
+ */
+enum class Correction(val label: String, private val filters: List<Biquad>) {
+    OFF("Off", emptyList()),
+    ANC_ON("ANC on", listOf(
+        Biquad.lowShelf(105f, -5.0f, 0.70f), Biquad.peak(83f, 5.8f, 0.62f),
+        Biquad.peak(400f, -3.4f, 0.73f), Biquad.peak(1230f, 1.6f, 0.57f),
+        Biquad.peak(5616f, -3.9f, 2.97f), Biquad.highShelf(10000f, -8.1f, 0.70f),
+        Biquad.peak(8787f, 2.6f, 2.09f), Biquad.peak(2925f, -0.9f, 3.01f),
+        Biquad.peak(10000f, 1.3f, 4.01f), Biquad.peak(3810f, 0.9f, 2.93f),
+    )),
+    ANC_OFF("ANC off", listOf(
+        Biquad.lowShelf(105f, -1.3f, 0.70f), Biquad.peak(374f, -2.9f, 1.64f),
+        Biquad.peak(86f, 1.8f, 0.99f), Biquad.peak(3719f, 2.2f, 2.64f),
+        Biquad.peak(29f, -1.4f, 1.74f), Biquad.highShelf(10000f, -7.1f, 0.70f),
+        Biquad.peak(5958f, -2.4f, 4.37f), Biquad.peak(9160f, 1.7f, 2.13f),
+        Biquad.peak(2311f, 1.0f, 4.84f), Biquad.peak(4481f, 1.3f, 5.61f),
+    ));
+
+    fun gainAt(hz: Float): Float = filters.fold(0f) { acc, f -> acc + f.dbAt(hz) }
 }
 
 data class SoundSettings(
@@ -37,16 +61,23 @@ data class SoundSettings(
     val preset: SoundPreset = SoundPreset.FLAT,
     val gains: List<Float> = SoundPreset.FLAT.gains,
     val boost: Float = 0f,
+    val correction: Correction = Correction.OFF,
 )
 
 /** Where the sound is going; each output keeps its own settings. */
-data class SoundOutput(val key: String, val label: String)
+data class SoundOutput(val key: String, val label: String) {
+    /** Only the FreeBuds Pro 4 have a measured correction so far. */
+    val hasCorrection: Boolean get() = label.contains("FreeBuds Pro 4", ignoreCase = true)
+}
 
-/** Shapes Spotify's audio session: 10-band EQ, loudness boost and a limiter, per headphone. */
+/** Shapes Spotify's audio session: 10-band EQ, headphone correction, loudness boost and a limiter. */
 object SoundEngine {
     val CENTERS = floatArrayOf(31f, 62f, 125f, 250f, 500f, 1000f, 2000f, 4000f, 8000f, 16000f)
     val BAND_LABELS = listOf("31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k")
     private val CUTOFFS = FloatArray(10) { i -> if (i == 9) 20000f else sqrt(CENTERS[i] * CENTERS[i + 1]) }
+    // The correction runs on its own 31 third-octave bands, after your EQ.
+    private val POST = FloatArray(31) { 20f * 2f.pow(it / 3f) }
+    private val POST_CUTOFFS = FloatArray(31) { i -> if (i == 30) 22000f else POST[i] * 2f.pow(1f / 6f) }
     const val MAX_DB = 12f
     const val MAX_BOOST = 6f
     private const val PRIORITY = 1000
@@ -69,6 +100,7 @@ object SoundEngine {
     private var dpBroken = false
     private var dp: Any? = null // DynamicsProcessing, kept untyped for older Android
     private var eq: Equalizer? = null
+    private val bandCache = HashMap<Correction, FloatArray>()
 
     private fun prefs() = app!!.getSharedPreferences("fidelis_sound", Context.MODE_PRIVATE)
 
@@ -93,6 +125,7 @@ object SoundEngine {
         it.copy(preset = SoundPreset.CUSTOM, gains = it.gains.toMutableList().also { g -> g[i] = db.coerceIn(-MAX_DB, MAX_DB) })
     }
     fun setBoost(db: Float) = update { it.copy(boost = ((db * 2f).roundToInt() / 2f).coerceIn(0f, MAX_BOOST)) }
+    fun setCorrection(c: Correction) = update { it.copy(enabled = true, correction = c) }
 
     private fun update(change: (SoundSettings) -> SoundSettings) {
         val next = change(_settings.value)
@@ -132,20 +165,30 @@ object SoundEngine {
             val p = raw.split('|')
             val gains = p[3].split(',').map { it.toFloat() }
             require(gains.size == 10)
-            SoundSettings(p[0] == "1", SoundPreset.valueOf(p[1]), gains, p[2].toFloat())
+            // 1.3 had a hand-tuned "FreeBuds Pro 4" preset; the measured correction replaces it.
+            val old = p[1] == "FREEBUDS_PRO_4"
+            SoundSettings(
+                enabled = p[0] == "1",
+                preset = if (old) SoundPreset.FLAT else SoundPreset.valueOf(p[1]),
+                gains = if (old) SoundPreset.FLAT.gains else gains,
+                boost = p[2].toFloat(),
+                correction = when {
+                    !out.hasCorrection -> Correction.OFF
+                    old -> Correction.ANC_ON
+                    else -> p.getOrNull(4)?.let { n -> Correction.values().firstOrNull { it.name == n } } ?: Correction.ANC_ON
+                },
+            )
         }.getOrElse { defaults(out) }
     }
 
     private fun defaults(out: SoundOutput) =
-        if (out.label.contains("FreeBuds Pro 4", ignoreCase = true))
-            SoundSettings(false, SoundPreset.FREEBUDS_PRO_4, SoundPreset.FREEBUDS_PRO_4.gains)
-        else SoundSettings()
+        SoundSettings(correction = if (out.hasCorrection) Correction.ANC_ON else Correction.OFF)
 
     private fun save() {
         val s = _settings.value
         prefs().edit().putString(
             _device.value.key,
-            "${if (s.enabled) 1 else 0}|${s.preset.name}|${s.boost}|${s.gains.joinToString(",")}",
+            "${if (s.enabled) 1 else 0}|${s.preset.name}|${s.boost}|${s.gains.joinToString(",")}|${s.correction.name}",
         ).apply()
     }
 
@@ -170,26 +213,35 @@ object SoundEngine {
         }
     }
 
+    private fun correctionBands(c: Correction) = bandCache.getOrPut(c) {
+        FloatArray(POST.size) { c.gainAt(POST[it]).coerceIn(-MAX_DB, MAX_DB) }
+    }
+
     @RequiresApi(28)
     private fun applyDp(s: SoundSettings) {
         eq?.let { runCatching { it.release() } }; eq = null
         val fx = (dp as? DynamicsProcessing) ?: DynamicsProcessing(
             PRIORITY, session,
             DynamicsProcessing.Config.Builder(
-                DynamicsProcessing. VARIANT_FAVOR_FREQUENCY_RESOLUTION, 2,
-                true, CENTERS.size, false, 0, false, 0, true,
+                DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION, 2,
+                true, CENTERS.size, false, 0, true, POST.size, true,
             ).build(),
         ).also { dp = it }
-        val bands = DynamicsProcessing.Eq(true, true, CENTERS.size)
-        for (i in CENTERS.indices) bands.setBand(i, DynamicsProcessing.EqBand(true, CUTOFFS[i], s.gains[i]))
-        fx.setPreEqAllChannelsTo(bands)
+        val pre = DynamicsProcessing.Eq(true, true, CENTERS.size)
+        for (i in CENTERS.indices) pre.setBand(i, DynamicsProcessing.EqBand(true, CUTOFFS[i], s.gains[i]))
+        fx.setPreEqAllChannelsTo(pre)
+        val fix = correctionBands(s.correction)
+        val post = DynamicsProcessing.Eq(true, true, POST.size)
+        for (i in POST.indices) post.setBand(i, DynamicsProcessing.EqBand(true, POST_CUTOFFS[i], fix[i]))
+        fx.setPostEqAllChannelsTo(post)
         // Limiter just under full scale: attack 1 ms, release 60 ms, ratio 10:1, threshold -1 dB.
         fx.setLimiterAllChannelsTo(DynamicsProcessing.Limiter(true, true, 0, 1f, 60f, 10f, -1f, 0f))
-        // Lower the input by the biggest EQ boost so boosts can't clip, then add the user's boost.
-        val headroom = (s.gains.maxOrNull() ?: 0f).coerceAtLeast(0f)
+        // Lower the input by the biggest boosts so they can't clip, then add the user's boost.
+        val headroom = (s.gains.maxOrNull() ?: 0f).coerceAtLeast(0f) + (fix.maxOrNull() ?: 0f).coerceAtLeast(0f)
         fx.setInputGainAllChannelsTo(s.boost - headroom)
         fx.enabled = true
-        _status.value = "Shaping Spotify's sound · 10 bands + limiter"
+        _status.value = if (s.correction == Correction.OFF) "Shaping Spotify's sound · 10 bands + limiter"
+            else "Shaping Spotify's sound · 10 bands + FreeBuds correction + limiter"
     }
 
     private fun applyEq(s: SoundSettings) {
@@ -198,8 +250,8 @@ object SoundEngine {
         val hi = fx.bandLevelRange[1].toInt()
         for (b in 0 until fx.numberOfBands) {
             val hz = fx.getCenterFreq(b.toShort()) / 1000f
-            val mb = (gainAt(s.gains, hz) * 100f).roundToInt().coerceIn(lo, hi)
-            fx.setBandLevel(b.toShort(), mb.toShort())
+            val db = gainAt(s.gains, hz) + s.correction.gainAt(hz)
+            fx.setBandLevel(b.toShort(), (db * 100f).roundToInt().coerceIn(lo, hi).toShort())
         }
         fx.enabled = true
         _status.value = "Shaping Spotify's sound · ${fx.numberOfBands}-band mode (no boost)"

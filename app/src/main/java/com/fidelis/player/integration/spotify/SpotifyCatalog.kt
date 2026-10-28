@@ -92,7 +92,7 @@ class SpotifyCatalog @Inject constructor(private val repo: SpotifyRepository) {
             .mapNotNull { t ->
                 val uri = t.optString("uri")
                 if (!uri.startsWith("spotify:track:")) null
-                else PlaylistTrack(uri, t.optString("name"), t.leadArtist().ifBlank { album.artist }, album.imageUrl)
+                else PlaylistTrack(uri, t.optString("name"), t.leadArtist().ifBlank { album.artist }, album.imageUrl, t.optLong("duration_ms"))
             }.distinctBy { it.uri }
         AlbumPage(album, tracks)
     }

@@ -34,9 +34,10 @@ data class PlaylistTrack(
     val title: String,
     val artist: String,
     val imageUrl: String? = null,
+    val durationMs: Long = 0L,
 )
 
-fun PlaylistTrack.toQueue() = QueueTrack(uri, title, artist, imageUrl)
+fun PlaylistTrack.toQueue() = QueueTrack(uri, title, artist, imageUrl, durationMs)
 
 @Singleton
 class SpotifyRepository @Inject constructor(
@@ -297,7 +298,7 @@ internal fun JSONObject.toPlaylistTrack(): PlaylistTrack? {
     // Smallest image (last) is plenty for row thumbnails.
     val img = if (images != null && images.length() > 0)
         images.optJSONObject(images.length() - 1)?.optString("url") else null
-    return PlaylistTrack(uri, optString("name"), firstArtist(), img?.ifBlank { null })
+    return PlaylistTrack(uri, optString("name"), firstArtist(), img?.ifBlank { null }, optLong("duration_ms"))
 }
 
 private fun JSONObject.toSpotifyTrack(): SpotifyTrack {

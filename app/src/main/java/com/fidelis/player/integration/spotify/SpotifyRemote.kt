@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class QueueTrack(val uri: String, val title: String, val artist: String, val imageUrl: String? = null)
+data class QueueTrack(val uri: String, val title: String, val artist: String, val imageUrl: String? = null, val durationMs: Long = 0L)
 
 /** One slot in Up next. [id] stays stable while the slot is moved around. */
 data class QueueEntry(val id: Long, val track: QueueTrack)
@@ -43,9 +43,15 @@ class SpotifyRemote @Inject constructor() {
     data class Snapshot(
         val title: String, val artist: String, val isPaused: Boolean,
         val positionMs: Long, val durationMs: Long, val imageUri: String?, val uri: String?,
+        val at: Long = SystemClock.elapsedRealtime(),
     ) {
         fun matches(t: QueueTrack) = uri == t.uri ||
             (title.equals(t.title, ignoreCase = true) && artist.equals(t.artist, ignoreCase = true))
+
+        /** Where the song is right now. Spotify only reports the position when something changes. */
+        fun livePosition(): Long =
+            if (isPaused || durationMs <= 0) positionMs
+            else (positionMs + SystemClock.elapsedRealtime() - at).coerceIn(0L, durationMs)
     }
 
     private var appRemote: SpotifyAppRemote? = null
@@ -274,6 +280,9 @@ class SpotifyRemote @Inject constructor() {
         _queue.value = up.filterIndexed { i, _ -> i != index }
         upNextChanged()
     }
+
+    /** Replaces Up next and keeps the current song playing (song radio). */
+    fun setUpNext(tracks: List<QueueTrack>) { _queue.value = tracks.map(::entry); upNextChanged() }
 
     fun clearQueue() { _queue.value = emptyList(); upNextChanged() }
 

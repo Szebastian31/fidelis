@@ -20,12 +20,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.fidelis.player.audio.Correction
 import com.fidelis.player.audio.SoundEngine
 import com.fidelis.player.audio.SoundPreset
 import com.fidelis.player.ui.theme.*
 import kotlin.math.roundToInt
 
-/** Equalizer, presets and safe loudness boost for Spotify's sound, per headphone. */
+/** Equalizer, headphone correction and safe loudness boost for Spotify's sound, per headphone. */
 @Composable
 fun SoundCard() {
     val context = LocalContext.current
@@ -49,7 +50,23 @@ fun SoundCard() {
                     colors = SwitchDefaults.colors(checkedTrackColor = Fidelis.purple, checkedThumbColor = Color.White),
                 )
             }
-            Spacer(Modifier.height(14.dp))
+            if (device.hasCorrection) {
+                Spacer(Modifier.height(16.dp))
+                Text("Headphone correction", color = Fidelis.ink, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Correction.values().forEach { c ->
+                        FidelisChip(c.label, s.enabled && s.correction == c, { SoundEngine.setCorrection(c) })
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "A measured curve for the FreeBuds Pro 4 (AutoEq, from Regan Cipher's measurements). " +
+                        "Pick the one that matches your noise-cancelling mode; presets and sliders sit on top.",
+                    color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Spacer(Modifier.height(16.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SoundPreset.values().filter { it != SoundPreset.CUSTOM || s.preset == SoundPreset.CUSTOM }.forEach { p ->
                     FidelisChip(p.label, s.enabled && s.preset == p, { SoundEngine.applyPreset(p) })
