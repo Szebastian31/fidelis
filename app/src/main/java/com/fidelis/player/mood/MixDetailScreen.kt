@@ -43,7 +43,7 @@ fun MixDetailScreen(
     val tracks = m.tracks
 
     FidelisBackground {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = chromeBottom())) {
             item {
                 val meta = buildString {
                     append("${tracks.size} songs")

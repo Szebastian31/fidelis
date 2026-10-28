@@ -65,7 +65,7 @@ fun PlaylistsScreen(
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = EDGE, end = EDGE, bottom = if (playing != null) 100.dp else 24.dp),
+                contentPadding = PaddingValues(start = EDGE, end = EDGE, bottom = chromeBottom()),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {

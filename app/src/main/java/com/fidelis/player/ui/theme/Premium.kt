@@ -128,7 +128,7 @@ fun GlassCard(modifier: Modifier = Modifier, radius: Dp = 24.dp, content: @Compo
 
 @Composable
 fun ScreenHeader(title: String, eyebrow: String? = null, trailing: @Composable RowScope.() -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 20.dp), verticalAlignment = Alignment.Bottom) {
+    Row(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 16.dp, bottom = 20.dp), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
             eyebrow?.let {
                 Text(it.uppercase(), color = Fidelis.violet, style = MaterialTheme.typography.labelMedium)

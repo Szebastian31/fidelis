@@ -54,7 +54,7 @@ fun ArtistScreen(
 
     FidelisBackground {
         Box(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 110.dp)) {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = chromeBottom())) {
                 item { TopBar(onBack) }
                 item {
                     Column(pad.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -151,7 +151,7 @@ fun AlbumScreen(
 
     FidelisBackground {
         Box(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 110.dp)) {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = chromeBottom())) {
                 item { TopBar(onBack) }
                 item {
                     Column(pad.fillMaxWidth(), horizontalAlignment = Alignment. CenterHorizontally) {
@@ -213,7 +213,7 @@ fun AlbumScreen(
 
 @Composable
 private fun TopBar(onBack: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp)) {
         IconCircle(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
     }
 }

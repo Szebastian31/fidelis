@@ -90,12 +90,11 @@ class MainActivity : ComponentActivity() {
                     Scaffold(
                         containerColor = Color.Transparent,
                         modifier = Modifier.fillMaxSize().background(Fidelis.skyGradient),
-                        bottomBar = { AppChrome(nav, spotifyRemote) },
                     ) { padding ->
                         AppNavHost(
                             nav = nav, currentSkin = skin,
                             onSkinChange = { skin = it; uiPrefs.edit().putString("skin", it.name).apply() },
-                            contentPadding = padding,
+                            remote = spotifyRemote,
                         )
                     }
                 }

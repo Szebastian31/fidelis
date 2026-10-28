@@ -61,7 +61,7 @@ fun MoodScreen(onOpenPlayer: () -> Unit, onOpenMix: (String) -> Unit, vm: MoodVi
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = if (playing != null) 100.dp else 24.dp),
+                contentPadding = PaddingValues(bottom = chromeBottom()),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {

@@ -55,7 +55,7 @@ fun DetailHeader(
                 contentScale = ContentScale.Crop)
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconCircle(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = onBack)
                 Spacer(Modifier.weight(1f))
                 trailing()

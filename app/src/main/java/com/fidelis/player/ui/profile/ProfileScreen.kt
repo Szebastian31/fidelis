@@ -54,7 +54,7 @@ fun ProfileScreen(current: Skin, onSkinChange: (Skin) -> Unit, vm: ProfileViewMo
     FidelisBackground {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp).padding(bottom = 110.dp),
+                .padding(horizontal = 20.dp).padding(bottom = chromeBottom()),
         ) {
             ScreenHeader("Profile", eyebrow = "Fidelis")
 

@@ -85,6 +85,7 @@ dependencies {
     implementation("com.spotify.android:auth:2.1.0")
     implementation("androidx.browser:browser:1.8.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("dev.chrisbanes.haze:haze:1.1.1") // frosted glass under the tab bar
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)

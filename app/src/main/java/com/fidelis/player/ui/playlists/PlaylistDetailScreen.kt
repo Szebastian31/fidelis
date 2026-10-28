@@ -42,7 +42,7 @@ fun PlaylistDetailScreen(
     val label = if (vm.isLiked) "your Liked Songs" else p?.name ?: "this playlist"
 
     FidelisBackground {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = chromeBottom())) {
             item {
                 val count = if (tracks.isNotEmpty()) tracks.size else p?.trackCount ?: 0
                 val total = tracks.sumOf { it.durationMs }

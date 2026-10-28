@@ -54,7 +54,7 @@ fun SearchScreen(
 
     FidelisBackground {
         Box(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 110.dp)) {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = chromeBottom())) {
                 item { Box(pad) { ScreenHeader("Search", eyebrow = "Spotify") } }
                 item {
                     SearchField(vm.query, vm::onQuery, onSubmit = { vm.remember(); keyboard?.hide() }, pad)
