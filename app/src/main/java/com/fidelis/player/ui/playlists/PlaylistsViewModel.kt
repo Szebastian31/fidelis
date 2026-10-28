@@ -18,7 +18,6 @@ import com.spotify.protocol.types.ListItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -50,7 +49,7 @@ class PlaylistsViewModel @Inject constructor(
 
     init {
         // These come through the Spotify app, so load them once it's connected.
-        viewModelScope.launch { remote.connected.distinctUntilChanged().filter { it }.collect { loadHome() } }
+        viewModelScope.launch { remote.connected.filter { it }.collect { loadHome() } }
     }
 
     private fun loadHome() {
