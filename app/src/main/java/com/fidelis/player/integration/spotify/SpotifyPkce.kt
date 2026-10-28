@@ -26,6 +26,8 @@ class SpotifyPkce(private val clientId: String, private val redirectUri: String)
         "playlist-read-collaborative",
         "user-top-read",
         "user-read-recently-played",
+        "user-read-playback-state",
+        "user-modify-playback-state",
     )
 
     fun buildAuthUrl(state: String): String {

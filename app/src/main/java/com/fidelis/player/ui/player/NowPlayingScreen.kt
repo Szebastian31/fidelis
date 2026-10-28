@@ -104,6 +104,8 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
     val scope = rememberCoroutineScope()
     val list = rememberLazyListState()
     val actions = LocalTrackActions.current
+    var devicesOpen by remember { mutableStateOf(false) }
+    if (devicesOpen) PlayingOnSheet(onDismiss = { devicesOpen = false })
 
     // One colour from the cover washes the whole player; the look's accent if the cover is grey.
     val wash by animateColorAsState(rememberArtTint(art) ?: Fidelis.purple, tween(700), label = "wash")
@@ -186,6 +188,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                         onShuffle = vm::reshuffle,
                         onArtist = { snap?.artist?.takeIf { it.isNotBlank() }?.let { a -> actions?.openArtist(a) } },
                         onRadio = { snap?.let { s -> actions?.songRadio(s.title, s.artist) } },
+                        onDevices = { devicesOpen = true },
                         onQueue = { scope.launch { list.animateScrollToItem(1) } },
                     )
                 }

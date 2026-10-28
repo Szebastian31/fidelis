@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3. RequestBody.Companion.toRequestBody
 import okhttp3.Request
 import org.json.JSONObject
 import java.net.URLEncoder
@@ -108,6 +110,21 @@ class SpotifyRepository @Inject constructor(
         } else first
         resp.use { if (it.isSuccessful) JSONObject(it.body?.string().orEmpty()) else null }
     }.getOrNull()
+
+    /** Any Web API call; refreshes the token on 401. Returns the HTTP code and body (0 = no network). */
+    internal fun send(method: String, url: String, json: String? = null): Pair<Int, String> = runCatching {
+        val token = tokenStore.spotifyAccessToken ?: return 401 to ""
+        fun req(t: String) = Request.Builder().url(url).header("Authorization", "Bearer $t")
+            .method(method, json?.toRequestBody("application/json".toMediaType()) ?: if (method == "GET") null else ByteArray(0).toRequestBody())
+            .build()
+        val first = client.newCall(req(token)).execute()
+        val resp = if (first.code == 401) {
+            first.close()
+            val fresh = refreshAccessToken(token) ?: return 401 to ""
+            client.newCall(req(fresh)).execute()
+        } else first
+        resp.use { it.code to it.body?.string().orEmpty() }
+    }.getOrDefault(0 to "")
 
     private fun refreshAccessToken(expired: String): String? = synchronized(refreshLock) {
         // Another request may have refreshed while we waited.

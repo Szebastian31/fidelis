@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -80,7 +81,7 @@ internal fun Hero(
     onPrev: () -> Unit, onToggle: () -> Unit, onNext: () -> Unit,
     onScrub: (Float) -> Unit, onScrubEnd: () -> Unit,
     onLyrics: () -> Unit, onShuffle: () -> Unit, onQueue: () -> Unit,
-    onArtist: () -> Unit = {}, onRadio: () -> Unit = {},
+    onArtist: () -> Unit = {}, onRadio: () -> Unit = {}, onDevices: () -> Unit = {},
 ) {
     val img = remember(art) { art?.asImageBitmap() }
     val scope = rememberCoroutineScope()
@@ -169,7 +170,7 @@ internal fun Hero(
             IconCircle(Icons.Rounded.KeyboardArrowDown, "Collapse", onClick = onClose)
             Text("NOW PLAYING", color = Fidelis.inkSoft, style = MaterialTheme.typography.labelMedium,
                 textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-            Spacer(Modifier.size(40.dp))
+            IconCircle(Icons.Rounded.Speaker, "Playing on", onClick = onDevices)
         }
 
         Column(

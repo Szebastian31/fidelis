@@ -133,11 +133,9 @@ fun AppNavHost(
                 NowPlayingScreen(onBack = { nav.popBackStack() })
             }
         }
-        // A soft shade under the clock, so it stays readable over whatever scrolls beneath it.
+        // Frosted band behind the clock; content scrolls under it.
         AnimatedVisibility(!onPlayer, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
-            Box(Modifier.fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Fidelis.bg0.copy(alpha = 0.7f), Color.Transparent)))
-                .statusBarsPadding().height(10.dp))
+            TopGlass(haze)
         }
         AppChrome(nav, remote, haze, Modifier.align(Alignment.BottomCenter))
     }
@@ -242,4 +240,22 @@ fun BottomBar(nav: NavHostController) {
             }
         }
     }
+}
+
+/** Frosted band behind the clock: solid at the very top, half see-through at its lower edge. */
+@Composable
+private fun TopGlass(haze: HazeState) {
+    val bg = Fidelis.bg0
+    Box(
+        Modifier.fillMaxWidth()
+            .hazeChild(haze) {
+                backgroundColor = bg
+                tints = emptyList()
+                blurRadius = 26.dp
+                noiseFactor = 0.06f
+                mask = Brush.verticalGradient(0.78f to Color.Black, 1f to Color.Transparent)
+            }
+            .background(Brush.verticalGradient(0f to bg, 0.78f to bg.copy(alpha = 0.5f), 1f to Color.Transparent))
+            .statusBarsPadding().height(14.dp),
+    )
 }
