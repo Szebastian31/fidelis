@@ -21,6 +21,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.material.icons.rounded.Podcasts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.fidelis.player.integration.spotify.OpenedItems
+import com.fidelis.player.ui.playlists.SpotifyPageScreen
+import com.fidelis.player.ui.podcasts.PodcastsScreen
+import com.fidelis.player.ui.podcasts.ShowScreen
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +69,7 @@ import dev.chrisbanes.haze.hazeChild
 private enum class Dest(val route: String, val label: String, val icon: ImageVector) {
     Playlists("playlists", "Playlists", Icons.AutoMirrored.Rounded.QueueMusic),
     Search("search", "Search", Icons.Rounded.Search),
+    Podcasts("podcasts", "Podcasts", Icons.Rounded.Podcasts),
     Mood("mood", "Mood", Icons.Rounded.AutoAwesome),
     Profile("profile", "Profile", Icons.Rounded.Person),
 }
@@ -67,6 +79,8 @@ private const val DETAIL = "playlist/{playlistId}"
 private const val MIX = "mix/{mixId}"
 private const val ARTIST = "artist/{artistId}"
 private const val ALBUM = "album/{albumId}"
+private const val SPOTIFY = "spotify/{key}"
+private const val SHOW = "show/{showId}"
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.toPlayer() =
     targetState.destination.route == PLAYER
@@ -93,6 +107,18 @@ fun AppNavHost(
     val openPlayer = { nav.navigate(PLAYER) { launchSingleTop = true } }
     val openArtist = { id: String -> nav.navigate("artist/$id") }
     val openAlbum = { id: String -> nav.navigate("album/$id") }
+    // Tapping the tab you're on goes back to its start: pages close and the list returns to the top.
+    val resets = remember { mutableStateMapOf<String, Int>() }
+    val reselect: (String) -> Unit = { r ->
+        if (nav.currentDestination?.route == r) {
+            resets[r] = (resets[r] ?: 0) + 1
+        } else if (!nav.popBackStack(r, inclusive = false)) {
+            nav.navigate(r) {
+                popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true; restoreState = true
+            }
+        }
+    }
     Box(modifier.fillMaxSize()) {
         NavHost(
             nav, startDestination = Dest.Playlists.route, modifier = Modifier.fillMaxSize().haze(haze),
@@ -103,15 +129,24 @@ fun AppNavHost(
             popExitTransition = { fadeOut(tween(180)) },
         ) {
             composable(Dest.Playlists.route) {
-                PlaylistsScreen(onOpenPlaylist = { id -> nav.navigate("playlist/$id") }, onOpenPlayer = openPlayer, onOpenArtist = openArtist, onOpenAlbum = openAlbum)
+                key(resets["playlists"]) { PlaylistsScreen(onOpenPlaylist = { id -> nav.navigate("playlist/$id") }, onOpenPlayer = openPlayer, onOpenArtist = openArtist, onOpenAlbum = openAlbum, onOpenSpotify = { item -> nav.navigate("spotify/${OpenedItems.put(item)}") }) }
             }
             composable(Dest.Search.route) {
-                SearchScreen(onOpenPlayer = openPlayer, onOpenArtist = openArtist, onOpenAlbum = openAlbum)
+                key(resets["search"]) { SearchScreen(onOpenPlayer = openPlayer, onOpenArtist = openArtist, onOpenAlbum = openAlbum) }
             }
             composable(Dest.Mood.route) {
-                MoodScreen(onOpenPlayer = openPlayer, onOpenMix = { id -> nav.navigate("mix/$id") { launchSingleTop = true } })
+                key(resets["mood"]) { MoodScreen(onOpenPlayer = openPlayer, onOpenMix = { id -> nav.navigate("mix/$id") { launchSingleTop = true } }) }
             }
-            composable(Dest.Profile.route) { ProfileScreen(currentSkin, onSkinChange) }
+            composable(Dest.Profile.route) { key(resets["profile"]) { ProfileScreen(currentSkin, onSkinChange) } }
+            composable(Dest.Podcasts.route) {
+                key(resets["podcasts"]) { PodcastsScreen(onOpenShow = { id -> nav.navigate("show/$id") }, onOpenPlayer = openPlayer) }
+            }
+            composable(SPOTIFY, enterTransition = pageIn, popExitTransition = pageOut) {
+                SpotifyPageScreen(onBack = { nav.popBackStack() }, onOpenPlayer = openPlayer)
+            }
+            composable(SHOW, enterTransition = pageIn, popExitTransition = pageOut) {
+                ShowScreen(onBack = { nav.popBackStack() }, onOpenPlayer = openPlayer)
+            }
             composable(DETAIL, enterTransition = pageIn, popExitTransition = pageOut) {
                 PlaylistDetailScreen(onBack = { nav.popBackStack() }, onOpenPlayer = openPlayer)
             }
@@ -137,7 +172,7 @@ fun AppNavHost(
         AnimatedVisibility(!onPlayer, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
             TopGlass(haze)
         }
-        AppChrome(nav, remote, haze, Modifier.align(Alignment.BottomCenter))
+        AppChrome(nav, remote, haze, Modifier.align(Alignment.BottomCenter), onReselect = reselect)
     }
 }
 
@@ -146,13 +181,17 @@ fun AppNavHost(
  * at the top edge and fully frosted over at the bottom. Hidden on the player.
  */
 @Composable
-fun AppChrome(nav: NavHostController, remote: SpotifyRemote, haze: HazeState, modifier: Modifier = Modifier) {
+fun AppChrome(nav: NavHostController, remote: SpotifyRemote, haze: HazeState, modifier: Modifier = Modifier, onReselect: (String) -> Unit = {}) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val snap by remote.state.collectAsState()
     val art by remote.artwork.collectAsState()
     val density = LocalDensity.current
     val bg = Fidelis.bg0
+    // After 10 minutes on pause the mini player tucks itself away; it comes back when music plays.
+    var idle by remember { mutableStateOf(false) }
+    val paused = snap?.isPaused != false
+    LaunchedEffect(paused) { idle = false; if (paused) { delay(10 * 60_000L); idle = true } }
     AnimatedVisibility(
         visible = route != PLAYER, modifier = modifier,
         enter = slideInVertically(tween(320)) { it } + fadeIn(tween(260)),
@@ -174,7 +213,7 @@ fun AppChrome(nav: NavHostController, remote: SpotifyRemote, haze: HazeState, mo
                 .padding(top = 18.dp),
         ) {
             AnimatedVisibility(
-                visible = snap?.title?.isNotBlank() == true,
+                visible = snap?.title?.isNotBlank() == true && !idle,
                 enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut(),
             ) {
                 snap?.let { s ->
@@ -188,14 +227,14 @@ fun AppChrome(nav: NavHostController, remote: SpotifyRemote, haze: HazeState, mo
                     )
                 }
             }
-            BottomBar(nav)
+            BottomBar(nav, onReselect)
         }
     }
 }
 
 /** Glass capsule. The selected tab grows into an accent pill with its label. */
 @Composable
-fun BottomBar(nav: NavHostController) {
+fun BottomBar(nav: NavHostController, onReselect: (String) -> Unit = {}) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     Box(
@@ -212,13 +251,13 @@ fun BottomBar(nav: NavHostController) {
         ) {
             Dest.entries.forEach { dest ->
                 val selected = route == dest.route ||
-                    (dest == Dest.Playlists && route == DETAIL) ||
+                    (dest == Dest.Playlists && (route == DETAIL || route == SPOTIFY)) || (dest == Dest.Podcasts && route == SHOW) ||
                     (dest == Dest.Mood && route == MIX) ||
                     (dest == Dest.Search && (route == ARTIST || route == ALBUM))
                 Row(
                     Modifier
                         .pressable {
-                            nav.navigate(dest.route) {
+                            if (selected) onReselect(dest.route) else nav.navigate(dest.route) {
                                 popUpTo(nav.graph.findStartDestination().id) { saveState = true }
                                 launchSingleTop = true; restoreState = true
                             }
@@ -226,7 +265,7 @@ fun BottomBar(nav: NavHostController) {
                         .clip(CircleShape)
                         .then(if (selected) Modifier.background(Fidelis.accent) else Modifier)
                         .animateContentSize(spring(stiffness = Spring.StiffnessMediumLow))
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 13.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(dest.icon, contentDescription = dest.label,

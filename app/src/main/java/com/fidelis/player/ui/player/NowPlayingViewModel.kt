@@ -6,6 +6,7 @@ import com.fidelis.player.integration.lyrics.LrcLib
 import com.fidelis.player.integration.lyrics.Lyrics
 import com.fidelis.player.integration.spotify.QueueTrack
 import com.fidelis.player.integration.spotify.SpotifyRemote
+import com.fidelis.player.integration.spotify.SpotifyRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,7 @@ import javax.inject.Inject
 class NowPlayingViewModel @Inject constructor(
     private val remote: SpotifyRemote,
     private val lrclib: LrcLib,
+    private val repo: SpotifyRepository,
 ) : ViewModel() {
     val state = remote.state
     val queue = remote.queue
@@ -43,6 +45,20 @@ class NowPlayingViewModel @Inject constructor(
                     _lyrics.value = Lyrics.Loading
                     _lyrics.value = lrclib.find(s.artist, s.title, s.durationMs)
                 }
+        }
+    }
+
+    init {
+        // Covers for queued songs that came without one (Spotify mixes, albums…).
+        viewModelScope.launch {
+            val tried = HashSet<String>()
+            remote.queue.collect { q ->
+                val missing = (q.map { it.track } + remote.history.value)
+                    .filter { it.imageUrl == null && it.uri.startsWith("spotify:track:") }
+                    .map { it.uri }.distinct().filter { it !in tried }.take(20)
+                tried += missing
+                if (missing.isNotEmpty()) remote.fillArt(repo.trackArt(missing))
+            }
         }
     }
 

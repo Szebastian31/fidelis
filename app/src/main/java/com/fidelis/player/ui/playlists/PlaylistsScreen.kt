@@ -70,6 +70,7 @@ fun PlaylistsScreen(
     onOpenPlayer: () -> Unit,
     onOpenArtist: (String) -> Unit = {},
     onOpenAlbum: (String) -> Unit = {},
+    onOpenSpotify: (ListItem) -> Unit = {},
     vm: PlaylistsViewModel = hiltViewModel(),
 ) {
     val connected by vm.connected.collectAsState()
@@ -93,7 +94,7 @@ fun PlaylistsScreen(
             u.startsWith("spotify:artist:") -> onOpenArtist(id)
             u.startsWith("spotify:playlist:") && vm.ownsPlaylist(id) -> onOpenPlaylist(id)
             u.endsWith(":collection") -> onOpenPlaylist(LIKED_PLAYLIST_ID)
-            else -> play(item)
+            else -> onOpenSpotify(item)
         }
     }
     LaunchedEffect(connected) { if (connected) vm.refresh() }
@@ -170,7 +171,7 @@ fun PlaylistsScreen(
                         horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         item(key = "dj") { DjCard { vm.playDj(); onOpenPlayer() } }
                         itemsIndexed(home?.made.orEmpty(), key = { i, _ -> "made-$i" }) { _, item ->
-                            SpotifyTile(item, vm.spotifyHome, 164.dp, onOpen = { play(item) }, onPlay = { play(item) })
+                            SpotifyTile(item, vm.spotifyHome, 164.dp, onOpen = { open(item) }, onPlay = { play(item) })
                         }
                     }
                 }

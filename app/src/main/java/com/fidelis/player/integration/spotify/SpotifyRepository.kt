@@ -252,6 +252,16 @@ class SpotifyRepository @Inject constructor(
             }
         }
 
+    /** Cover art for songs that came without it, one small lookup each. */
+    suspend fun trackArt(uris: List<String>): Map<String, String> = withContext(Dispatchers.IO) {
+        buildMap {
+            for (u in uris) {
+                if (!u.startsWith("spotify:track:")) continue
+                getJson("https://api.spotify.com/v1/tracks/${u.removePrefix("spotify:track:")}")?.toPlaylistTrack()?.imageUrl?.let { put(u, it) }
+            }
+        }
+    }
+
     // ---------- Search ----------
 
     /** Song search, 10 per page (works with Spotify's tighter 2026 limits). */

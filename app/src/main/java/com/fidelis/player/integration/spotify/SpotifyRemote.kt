@@ -185,7 +185,7 @@ class SpotifyRemote @Inject constructor() {
             // Changed from outside Fidelis (Spotify app, headphones…). Follow along.
             else -> {
                 pushHistory(cur)
-                _current.value = QueueTrack(s.uri ?: "", s.title, s.artist)
+                _current.value = QueueTrack(s.uri ?: "", s.title, s.artist, spotifyImageUrl(s.imageUri), s.durationMs)
             }
         }
     }
@@ -402,13 +402,22 @@ class SpotifyRemote @Inject constructor() {
         scope.launch {
             val songs = (kotlinx.coroutines.withTimeoutOrNull(3_000) { browse(item, 100) } ?: emptyList())
                 .filter { it.uri.orEmpty().startsWith("spotify:track:") }
-                .map { QueueTrack(it.uri, it.title.orEmpty(), it.subtitle.orEmpty()) }
+                .map { QueueTrack(it.uri, it.title.orEmpty(), it.subtitle.orEmpty(), it.coverUrl()) }
             if (songs.size >= 2) playQueue(songs, from = item.title) else playItem(item)
         }
     }
 
     fun playUriWithQueue(uri: String) =
         playWithQueue(com.spotify.protocol.types.ListItem(uri, uri, null, "", "", true, true))
+
+    /** Adds cover art to songs that arrived without it. */
+    fun fillArt(art: Map<String, String>) {
+        if (art.isEmpty()) return
+        fun QueueTrack.withArt() = if (imageUrl == null) art[uri]?.let { copy(imageUrl = it) } ?: this else this
+        _queue.value = _queue.value.map { it.copy(track = it.track.withArt()) }
+        _history.value = _history.value.map { it.withArt() }
+        _current.value = _current.value?.withArt()
+    }
 
     fun resume() { appRemote?.playerApi?.resume() }
     fun pause() { appRemote?.playerApi?.pause() }
@@ -441,3 +450,9 @@ fun <T> List<T>.freshShuffle(artist: (T) -> String): List<T> {
     }
     return out
 }
+
+/** Spotify app image ids ("spotify:image:…") map straight to Spotify's image server. */
+fun spotifyImageUrl(raw: String?): String? =
+    raw?.takeIf { it.startsWith("spotify:image:") }?.let { "https://i.scdn.co/image/" + it.removePrefix("spotify:image:") }
+
+fun com.spotify.protocol.types.ListItem.coverUrl(): String? = spotifyImageUrl(imageUri?.raw)
