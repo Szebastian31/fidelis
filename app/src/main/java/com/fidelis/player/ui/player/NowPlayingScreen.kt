@@ -100,6 +100,11 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
     val art by vm.artwork.collectAsState()
     val liked by vm.liked.collectAsState()
     val lyrics by vm.lyrics.collectAsState()
+    val queueFrom by vm.source.collectAsState()
+    val spotifyCtx by vm.spotifyContext.collectAsState()
+    val contextMode by vm.contextMode.collectAsState()
+    var soundOpen by remember { mutableStateOf(false) }
+    if (soundOpen) SoundSheet(onDismiss = { soundOpen = false })
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val list = rememberLazyListState()
@@ -189,6 +194,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                         onArtist = { snap?.artist?.takeIf { it.isNotBlank() }?.let { a -> actions?.openArtist(a) } },
                         onRadio = { snap?.let { s -> actions?.songRadio(s.title, s.artist) } },
                         onDevices = { devicesOpen = true },
+                    onSound = { soundOpen = true },
                         onQueue = { scope.launch { list.animateScrollToItem(1) } },
                     )
                 }
@@ -204,12 +210,22 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                 }
                 if (queue.isEmpty()) {
                     item {
-                        Text("Nothing queued. Use ⋮ › Play next or Add to queue on any song.",
+                    Text(if (contextMode) "Spotify picks what plays next${spotifyCtx?.let { " from $it" } ?: ""}. Anything you add plays first, then it carries on."
+                        else "Nothing queued. Use ⋮ › Play next or Add to queue on any song.",
                             color = Fidelis.inkFaint, style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
                     }
                 }
-                items(queue, key = { it.id }) { e ->
+            itemsIndexed(queue, key = { _, it -> it.id }) { qi, e ->
+                // Spotify-style sections: your own picks first, then where the rest comes from.
+                if (qi == 0 || queue[qi - 1].manual != e.manual) QueueHeader(
+                    when {
+                        e.manual -> "Next in queue"
+                        queueFrom != null -> "Next from: $queueFrom"
+                        contextMode && spotifyCtx != null -> "Next from: $spotifyCtx"
+                        else -> "Next up"
+                    },
+                )
                     val dragging = draggingId == e.id
                     QueueRow(
                         e = e, dragging = dragging,
@@ -236,6 +252,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                         },
                     )
                 }
+            if (contextMode && queue.isNotEmpty()) item { QueueHeader("Then Spotify carries on${spotifyCtx?.let { " with $it" } ?: ""}") }
                 if (history.isNotEmpty()) {
                     item { SectionLabel("Recently played", Modifier.padding(horizontal = 24.dp)) }
                     items(history.asReversed(), key = { "h-${it.uri}" }) { t ->
@@ -398,4 +415,10 @@ private fun QueueRow(
 private fun fmt(ms: Long): String {
     val s = (ms / 1000).coerceAtLeast(0)
     return "%d:%02d".format(s / 60, s % 60)
+}
+
+@Composable
+private fun QueueHeader(text: String) {
+    Text(text, color = Fidelis.ink, style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 14.dp, bottom = 4.dp))
 }

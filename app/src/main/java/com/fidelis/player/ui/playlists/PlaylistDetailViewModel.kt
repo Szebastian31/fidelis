@@ -11,6 +11,7 @@ import com.fidelis.player.integration.spotify.SpotifyPlaylist
 import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.SpotifyRepository
 import com.fidelis.player.integration.spotify.toQueue
+import com.fidelis.player.integration.spotify.freshShuffle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -42,8 +43,8 @@ class PlaylistDetailViewModel @Inject constructor(
         }
     }
 
-    fun playFrom(index: Int) = remote.playQueue(tracks.map { it.toQueue() }, index)
-    fun shuffle() { if (tracks.isNotEmpty()) remote.playQueue(tracks.shuffled().map { it.toQueue() }, 0) }
+    fun playFrom(index: Int) = remote.playQueue(tracks.map { it.toQueue() }, index, from = playlist?.name)
+    fun shuffle() { if (tracks.isNotEmpty()) remote.playQueue(tracks.freshShuffle { it.artist }.map { it.toQueue() }, 0, from = playlist?.name) }
 
     fun playNext(t: PlaylistTrack) = remote.playNext(listOf(t.toQueue()))
     fun addToQueue(t: PlaylistTrack) = remote.addToQueue(listOf(t.toQueue()))

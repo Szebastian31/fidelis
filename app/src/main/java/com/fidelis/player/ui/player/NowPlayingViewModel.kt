@@ -27,6 +27,9 @@ class NowPlayingViewModel @Inject constructor(
     val history = remote.history
     val artwork = remote.artwork
     val liked = remote.liked
+    val source = remote.source
+    val spotifyContext = remote.spotifyContext
+    val contextMode = remote.contextMode
 
     private val _lyrics = MutableStateFlow<Lyrics>(Lyrics.Loading)
     val lyrics: StateFlow<Lyrics> = _lyrics.asStateFlow()

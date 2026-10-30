@@ -28,7 +28,7 @@ import javax.inject.Singleton
 data class QueueTrack(val uri: String, val title: String, val artist: String, val imageUrl: String? = null, val durationMs: Long = 0L)
 
 /** One slot in Up next. [id] stays stable while the slot is moved around. */
-data class QueueEntry(val id: Long, val track: QueueTrack)
+data class QueueEntry(val id: Long, val track: QueueTrack, val manual: Boolean = false)
 
 /**
  * Bridge to the Spotify app plus Fidelis's own queue.
@@ -71,6 +71,13 @@ class SpotifyRemote @Inject constructor() {
     /** Last played songs, oldest first, max 10. */
     private val _history = MutableStateFlow<List<QueueTrack>>(emptyList()); val history: StateFlow<List<QueueTrack>> = _history.asStateFlow()
     private val _current = MutableStateFlow<QueueTrack?>(null); val current: StateFlow<QueueTrack?> = _current.asStateFlow()
+    /** Where the songs after your own picks come from ("Next from: …"). */
+    private val _source = MutableStateFlow<String?>(null); val source: StateFlow<String?> = _source.asStateFlow()
+    /** What Spotify itself says it's playing from (a playlist, the DJ…). */
+    private val _spotifyContext = MutableStateFlow<String?>(null); val spotifyContext: StateFlow<String?> = _spotifyContext.asStateFlow()
+    /** True while Spotify runs a whole playlist or the DJ and picks the next songs itself. */
+    private val _contextMode = MutableStateFlow(false); val contextMode: StateFlow<Boolean> = _contextMode.asStateFlow()
+    private var lastSeekAt = 0L
 
     private var nextId = 1L
     private var expecting: QueueTrack? = null      // song we just asked Spotify to start
@@ -96,6 +103,7 @@ class SpotifyRemote @Inject constructor() {
                 override fun onConnected(remote: SpotifyAppRemote) {
                     appRemote = remote; _connected.value = true; _connecting.value = false; _error.value = null
                     remote.playerApi.subscribeToPlayerState().setEventCallback { ps -> onPlayerState(ps, remote) }
+                    remote.playerApi.subscribeToPlayerContext().setEventCallback { c -> _spotifyContext.value = c?.title?.takeIf { it.isNotBlank() } }
                     startTicker()
                 }
                 override fun onFailure(error: Throwable) {
@@ -116,6 +124,12 @@ class SpotifyRemote @Inject constructor() {
             isPaused = ps.isPaused, positionMs = ps.playbackPosition,
             durationMs = t?.duration ?: 0L, imageUri = t?.imageUri?.raw, uri = t?.uri,
         )
+        // Headphone "next" goes to Spotify, which only knows this one song and restarts it. Treat that as next.
+        val was = _state.value
+        if (was != null && !was.isPaused && was.uri != null && was.uri == snap.uri && _queue.value.isNotEmpty() &&
+            expecting == null && snap.positionMs < 1_500 && was.livePosition() > 4_000 &&
+            was.livePosition() < was.durationMs - 4_000 && SystemClock.elapsedRealtime() - lastSeekAt > 3_000
+        ) { _state.value = snap; skipNext(); return }
         _state.value = snap
         lastStateAt = SystemClock.elapsedRealtime()
         if (t?.imageUri != null && t.imageUri.raw != lastArtUri) {
@@ -198,7 +212,7 @@ class SpotifyRemote @Inject constructor() {
 
     // ---------- Queue operations ----------
 
-    private fun entry(t: QueueTrack) = QueueEntry(nextId++, t)
+    private fun entry(t: QueueTrack, manual: Boolean = false) = QueueEntry(nextId++, t, manual)
 
     private fun pushHistory(t: QueueTrack?) {
         if (t == null || t.uri.isBlank()) return
@@ -223,6 +237,7 @@ class SpotifyRemote @Inject constructor() {
         invalidateHandOver()
         _current.value = t
         expecting = t; expectingSince = SystemClock.elapsedRealtime()
+        _contextMode.value = false
         appRemote?.playerApi?.play(t.uri)
         ensureService()
     }
@@ -236,10 +251,11 @@ class SpotifyRemote @Inject constructor() {
     }
 
     /** Replace Up next with [items] and start at [startIndex]. */
-    fun playQueue(items: List<QueueTrack>, startIndex: Int = 0) {
+    fun playQueue(items: List<QueueTrack>, startIndex: Int = 0, from: String? = null) {
         if (items.isEmpty()) return
         val i = startIndex.coerceIn(0, items.lastIndex)
-        _queue.value = items.drop(i + 1).map(::entry)
+        _queue.value = _queue.value.filter { it.manual } + items.drop(i + 1).map(::entry)
+        _source.value = from
         goTo(items[i])
     }
 
@@ -248,13 +264,16 @@ class SpotifyRemote @Inject constructor() {
 
     fun playNext(tracks: List<QueueTrack>) {
         if (tracks.isEmpty()) return
-        _queue.value = tracks.map(::entry) + _queue.value
+        _queue.value = tracks.map { entry(it, manual = true) } + _queue.value
         upNextChanged(); startIfIdle()
     }
 
     fun addToQueue(tracks: List<QueueTrack>) {
         if (tracks.isEmpty()) return
-        _queue.value = _queue.value + tracks.map(::entry)
+        // Your picks line up after the ones you already added, before the playlist carries on.
+        val q = _queue.value
+        val mine = q.takeWhile { it.manual }.size
+        _queue.value = q.take(mine) + tracks.map { entry(it, manual = true) } + q.drop(mine)
         upNextChanged(); startIfIdle()
     }
 
@@ -269,7 +288,10 @@ class SpotifyRemote @Inject constructor() {
     fun move(from: Int, to: Int) {
         val up = _queue.value.toMutableList()
         if (from !in up.indices || to !in up.indices || from == to) return
-        up.add(to, up.removeAt(from))
+        // Dropped among your picks it becomes one of them; dropped among the rest it joins them.
+        val e = up.removeAt(from)
+        val manual = (up.getOrNull(to - 1)?.manual ?: false) || (to == 0 && up.getOrNull(0)?.manual == true)
+        up.add(to, e.copy(manual = manual))
         _queue.value = up
         upNextChanged()
     }
@@ -282,11 +304,21 @@ class SpotifyRemote @Inject constructor() {
     }
 
     /** Replaces Up next and keeps the current song playing (song radio). */
-    fun setUpNext(tracks: List<QueueTrack>) { _queue.value = tracks.map(::entry); upNextChanged() }
+    fun setUpNext(tracks: List<QueueTrack>) {
+        _queue.value = _queue.value.filter { it.manual } + tracks.map(::entry)
+        _source.value = "Song radio"
+        upNextChanged()
+    }
 
     fun clearQueue() { _queue.value = emptyList(); upNextChanged() }
 
-    fun reshuffle() { _queue.value = _queue.value.shuffled(); upNextChanged() }
+    /** A fresh random order every time. Your own picks stay first; with nothing to shuffle, Spotify shuffles. */
+    fun reshuffle() {
+        val (mine, rest) = _queue.value.partition { it.manual }
+        if (rest.size < 2) { appRemote?.playerApi?.setShuffle(true); return }
+        _queue.value = mine + rest.freshShuffle { it.track.artist }
+        upNextChanged()
+    }
 
     /** Plays a whole Spotify context (e.g. a playlist Fidelis can't list). Clears Up next. */
     fun playContext(uri: String) {
@@ -294,6 +326,7 @@ class SpotifyRemote @Inject constructor() {
         _queue.value = emptyList()
         invalidateHandOver()
         expecting = null; _current.value = null
+        _contextMode.value = true; _source.value = null
         appRemote?.playerApi?.play(uri)
         ensureService()
     }
@@ -370,7 +403,7 @@ class SpotifyRemote @Inject constructor() {
             val songs = (kotlinx.coroutines.withTimeoutOrNull(3_000) { browse(item, 100) } ?: emptyList())
                 .filter { it.uri.orEmpty().startsWith("spotify:track:") }
                 .map { QueueTrack(it.uri, it.title.orEmpty(), it.subtitle.orEmpty()) }
-            if (songs.size >= 2) playQueue(songs) else playItem(item)
+            if (songs.size >= 2) playQueue(songs, from = item.title) else playItem(item)
         }
     }
 
@@ -379,7 +412,7 @@ class SpotifyRemote @Inject constructor() {
 
     fun resume() { appRemote?.playerApi?.resume() }
     fun pause() { appRemote?.playerApi?.pause() }
-    fun seekTo(ms: Long) { appRemote?.playerApi?.seekTo(ms) }
+    fun seekTo(ms: Long) { lastSeekAt = SystemClock.elapsedRealtime(); appRemote?.playerApi?.seekTo(ms) }
 
     private fun ensureService() {
         val ctx = appContext ?: return
@@ -395,4 +428,16 @@ class SpotifyRemote @Inject constructor() {
         const val HANDOVER_MS = 20_000L
         const val HISTORY = 10
     }
+}
+
+/** A new random order every time, keeping the same artist from playing twice in a row where it can. */
+fun <T> List<T>.freshShuffle(artist: (T) -> String): List<T> {
+    val pool = shuffled(kotlin.random.Random(System.nanoTime())).toMutableList()
+    val out = ArrayList<T>(size)
+    while (pool.isNotEmpty()) {
+        val last = out.lastOrNull()?.let(artist)
+        val i = pool.indexOfFirst { artist(it) != last }.let { if (it < 0) 0 else it }
+        out += pool.removeAt(i)
+    }
+    return out
 }

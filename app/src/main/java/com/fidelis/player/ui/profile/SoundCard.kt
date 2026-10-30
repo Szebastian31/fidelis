@@ -73,6 +73,10 @@ fun SoundCard() {
                 }
             }
             Spacer(Modifier.height(18.dp))
+            if (s.enabled) {
+                Text(s.preset.desc, color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(12.dp))
+            }
             Row(Modifier.fillMaxWidth().height(190.dp)) {
                 SoundEngine.BAND_LABELS.forEachIndexed { i, label ->
                     BandSlider(s.gains[i], label, s.enabled, { SoundEngine.setBand(i, it) }, Modifier.weight(1f).fillMaxHeight())

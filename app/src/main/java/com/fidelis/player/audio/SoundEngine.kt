@@ -22,14 +22,20 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
-enum class SoundPreset(val label: String, val gains: List<Float>) {
-    FLAT("Flat", List(10) { 0f }),
-    CLARITY("Clarity", listOf(0f, 0f, -1f, -1f, 0f, 0f, 1f, 2.5f, 3f, 2f)),
-    WARMTH("Warmth", listOf(2f, 2.5f, 2f, 1f, 0f, 0f, -0.5f, -1f, -1f, -1.5f)),
-    BASS("Bass", listOf(5f, 4.5f, 3.5f, 1.5f, 0f, 0f, 0f, 0f, 0f, 0f)),
-    VOCAL("Vocal", listOf(-2f, -1.5f, -1f, 0f, 1f, 2f, 3f, 2f, 0f, -1f)),
-    LATE_NIGHT("Late night", listOf(-3f, -2f, -1f, 0f, 0.5f, 1f, 1f, 0f, -1.5f, -3f)),
-    CUSTOM("Custom", List(10) { 0f }),
+enum class SoundPreset(val label: String, val desc: String, val gains: List<Float>) {
+    FLAT("Flat", "Spotify as it is.", List(10) { 0f }),
+    BASS("Bass boost", "Big, round low end for hip-hop, pop and electronic.", listOf(8f, 7f, 5.5f, 3f, 0.5f, 0f, 0f, 0f, 0f, 0f)),
+    CLUB("Club", "Punchy kick and crisp highs, like a big sound system.", listOf(7f, 6f, 3f, 0f, -2f, -1f, 1f, 3f, 4.5f, 5f)),
+    HIP_HOP("Hip-hop", "Deep sub and a voice that sits up front.", listOf(7.5f, 6.5f, 4f, 1f, -1.5f, -0.5f, 1.5f, 1f, 1.5f, 2f)),
+    ROCK("Rock", "Thick guitars and drums, sharp cymbals.", listOf(5f, 4f, 2f, -1f, -2.5f, -1f, 1.5f, 3.5f, 4.5f, 4.5f)),
+    VOCAL("Vocals", "Voices step forward, the boom steps back.", listOf(-3f, -3f, -2f, 0f, 2f, 4f, 5f, 3.5f, 0.5f, -1.5f)),
+    ACOUSTIC("Acoustic", "Natural and airy for guitars, piano and folk.", listOf(3f, 2.5f, 1.5f, 1f, 1.5f, 1f, 2f, 3f, 3f, 2f)),
+    CLARITY("Clarity", "Cleaner, more detailed top end and less mud.", listOf(0f, 0f, -1f, -2f, -1.5f, 0f, 2f, 4f, 5f, 4f)),
+    TREBLE("Treble boost", "Bright and sparkly; wakes up dull headphones.", listOf(-1f, -1f, 0f, 0f, 0f, 1f, 3f, 5f, 7f, 7f)),
+    WARMTH("Warmth", "Smooth and cosy; tames harsh recordings.", listOf(3f, 4f, 3.5f, 2f, 0.5f, 0f, -1f, -2f, -2.5f, -3f)),
+    PODCAST("Podcast", "Clear speech without rumble or hiss.", listOf(-6f, -5f, -3f, 0f, 3f, 4.5f, 4.5f, 2.5f, -1f, -4f)),
+    LATE_NIGHT("Late night", "Soft and even, nothing jumps out.", listOf(-5f, -4f, -2f, 0f, 1f, 2f, 2f, 0f, -3f, -5f)),
+    CUSTOM("Custom", "Your own curve.", List(10) { 0f }),
 }
 
 /**
@@ -79,7 +85,7 @@ object SoundEngine {
     private val POST = FloatArray(31) { 20f * 2f.pow(it / 3f) }
     private val POST_CUTOFFS = FloatArray(31) { i -> if (i == 30) 22000f else POST[i] * 2f.pow(1f / 6f) }
     const val MAX_DB = 12f
-    const val MAX_BOOST = 6f
+    const val MAX_BOOST = 12f
     private const val PRIORITY = 1000
     private const val KEY_SESSION = "spotify_session"
     private val BT = setOf(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLE_HEADSET, AudioDeviceInfo.TYPE_BLE_SPEAKER)

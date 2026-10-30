@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speaker
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -81,7 +82,7 @@ internal fun Hero(
     onPrev: () -> Unit, onToggle: () -> Unit, onNext: () -> Unit,
     onScrub: (Float) -> Unit, onScrubEnd: () -> Unit,
     onLyrics: () -> Unit, onShuffle: () -> Unit, onQueue: () -> Unit,
-    onArtist: () -> Unit = {}, onRadio: () -> Unit = {}, onDevices: () -> Unit = {},
+    onArtist: () -> Unit = {}, onRadio: () -> Unit = {}, onDevices: () -> Unit = {}, onSound: () -> Unit = {},
 ) {
     val img = remember(art) { art?.asImageBitmap() }
     val scope = rememberCoroutineScope()
@@ -234,6 +235,7 @@ internal fun Hero(
                 PlainIcon(Icons.Rounded.ChatBubbleOutline, "Lyrics", 24.dp, onLyrics, Fidelis.inkSoft)
                 PlainIcon(Icons.Rounded. Shuffle, "Shuffle Up next", 24.dp, onShuffle, Fidelis.inkSoft)
                 PlainIcon(Icons.Rounded.Radio, "Start song radio", 24.dp, onRadio, Fidelis.inkSoft)
+                PlainIcon(Icons.Rounded.Tune, "Sound", 24.dp, onSound, Fidelis.inkSoft)
                 PlainIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Up next", 24.dp, onQueue, Fidelis.inkSoft)
             }
         }

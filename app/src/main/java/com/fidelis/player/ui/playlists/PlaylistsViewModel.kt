@@ -83,7 +83,7 @@ class PlaylistsViewModel @Inject constructor(
     }
 
     fun playItem(item: ListItem) = remote.playWithQueue(item)
-    fun playDj() = remote.playUriWithQueue(SpotifyHome.DJ_URI)
+    fun playDj() = remote.playContext(SpotifyHome.DJ_URI)
     fun ownsPlaylist(id: String) = playlists.any { it.id == id }
 
     val pinned = pins.ids
