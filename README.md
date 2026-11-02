@@ -83,7 +83,7 @@ A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines
 
 **Keys.** Put `SPOTIFY_CLIENT_ID`, `LASTFM_API_KEY` and `LASTFM_SECRET` in `local.properties` (git-ignored) for local builds, and as repository secrets for GitHub Actions. Never commit them.
 
-**Spotify setup.** In the Spotify developer dashboard, add the redirect URI `fidelis://auth` and the Android package `com.fidelis.player` with the SHA-1 of `fidelis-debug.keystore`. In Development Mode, only accounts added under User Management can sign in.
+**Spotify setup.** In the Spotify developer dashboard, add the redirect URI `fidelis://auth` and the Android package `com.fidelis.player` with the SHA-1 of your own signing key (kept outside the repo; GitHub builds read it from the `FIDELIS_KEYSTORE_B64` and `FIDELIS_KEYSTORE_PASSWORD` secrets). In Development Mode, only accounts added under User Management can sign in.
 
 **Build and install:** push to `main`, then run `tools/install.sh`. **Screenshots:** `tools/screenshots.sh`, or `tools/screenshots.sh --banner-only` to rebuild just the banner.
 
