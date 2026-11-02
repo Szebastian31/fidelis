@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
 import com.fidelis.player.MainActivity
+import com.fidelis.player.annales.ListeningLog
+import com.fidelis.player.annales.follow
 import com.fidelis.player.R
 import com.fidelis.player.integration.spotify.QueueEntry
 import com.fidelis.player.integration.spotify.SpotifyRemote
@@ -55,6 +57,7 @@ class PlaybackService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        scope.launch { ListeningLog.get(this@PlaybackService).follow(remote) } // what you listen to, for Annales
         session = MediaSessionCompat(this, "Fidelis").apply {
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onPlay() = remote.resume()

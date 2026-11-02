@@ -49,5 +49,7 @@
                 <action android:name="android.media.action.CLOSE_AUDIO_EFFECT_CONTROL_SESSION" />
             </intent-filter>
         </receiver>
+        <!-- Shares each day's top track and listening time with Annales, the stamp journal. Read-only; answers Annales only. -->
+        <provider android:name=".annales.AnnalesProvider" android:authorities="com.fidelis.player.annales" android:exported="true" />
     </application>
 </manifest>
