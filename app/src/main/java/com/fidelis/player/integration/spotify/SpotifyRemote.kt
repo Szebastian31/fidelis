@@ -419,6 +419,18 @@ class SpotifyRemote @Inject constructor() {
         _current.value = _current.value?.withArt()
     }
 
+    /** Whether Spotify's crossfade is on. Spotify lets other apps read this setting, not change it. */
+    suspend fun crossfadeOn(): Boolean? {
+        val api = appRemote?.playerApi ?: return null
+        return kotlinx.coroutines.withTimeoutOrNull(2_000) {
+            kotlinx.coroutines.suspendCancellableCoroutine<Boolean?> { c ->
+                val r = api.crossfadeState
+                r.setResultCallback { s -> if (c.isActive) c.resumeWith(Result.success(s?.isEnabled)) }
+                r.setErrorCallback { if (c.isActive) c.resumeWith(Result.success(null)) }
+            }
+        }
+    }
+
     fun resume() { appRemote?.playerApi?.resume() }
     fun pause() { appRemote?.playerApi?.pause() }
     fun seekTo(ms: Long) { lastSeekAt = SystemClock.elapsedRealtime(); appRemote?.playerApi?.seekTo(ms) }

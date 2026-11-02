@@ -38,10 +38,12 @@ android {
 
     signingConfigs {
         getByName("debug") {
-            storeFile = file("../fidelis-debug.keystore")
-            storePassword = "fidelis123"
-            keyAlias = "fidelis"
-            keyPassword = "fidelis123"
+            // The signing key lives outside the repo: GitHub builds get it from repo secrets, local builds from local.properties.
+            val store = System.getenv("FIDELIS_KEYSTORE") ?: localProps.getProperty("FIDELIS_KEYSTORE")
+            val pass = System.getenv("FIDELIS_KEYSTORE_PASSWORD") ?: localProps.getProperty("FIDELIS_KEYSTORE_PASSWORD")
+            if (store != null && pass != null && file(store).exists()) {
+                storeFile = file(store); storePassword = pass; keyAlias = "fidelis"; keyPassword = pass
+            }
         }
     }
 

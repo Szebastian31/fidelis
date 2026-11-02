@@ -32,6 +32,10 @@ class AlbumViewModel @Inject constructor(
 
     private val tracks get() = page?.tracks.orEmpty()
 
+    /** Spotify's crossfade blurs albums that are made to flow from song to song. */
+    var crossfadeOn by mutableStateOf(false); private set
+    fun checkCrossfade() { viewModelScope.launch { crossfadeOn = remote.crossfadeOn() == true } }
+
     init { load() }
 
     fun load() {

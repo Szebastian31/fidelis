@@ -35,6 +35,7 @@ import coil.compose.AsyncImage
 import com.fidelis.player.integration.spotify.AlbumItem
 import com.fidelis.player.integration.spotify.PlaylistTrack
 import com.fidelis.player.ui.theme.*
+import kotlinx.coroutines.delay
 
 /** Artist: photo, Play / Shuffle / Artist radio, albums, singles & EPs, then songs. */
 @Composable
@@ -148,6 +149,8 @@ fun AlbumScreen(
     val p = vm.page
     val pad = Modifier.padding(horizontal = 20.dp)
     val songs = p?.tracks.orEmpty()
+    // Checked while the album is open, so the note goes away once crossfade is turned off.
+    LaunchedEffect(Unit) { while (true) { vm.checkCrossfade(); delay(4_000) } }
 
     FidelisBackground {
         Box(Modifier.fillMaxSize()) {
@@ -187,6 +190,7 @@ fun AlbumScreen(
                                 }
                             }, size = 52.dp)
                         }
+                        if (vm.crossfadeOn) CrossfadeNote()
                         Spacer(Modifier.height(8.dp))
                     }
                 }
@@ -249,4 +253,25 @@ private fun SongSheet(
         ),
         onDismiss = onDismiss,
     )
+}
+
+/** Spotify only lets you change crossfade in its own settings, so this points the way there. */
+@Composable
+private fun CrossfadeNote() {
+    val context = LocalContext.current
+    Row(
+        Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(16.dp)).background(Fidelis.glass)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Crossfade is on", color = Fidelis.ink, style = MaterialTheme.typography.titleSmall)
+            Text("Albums made to flow song to song sound best without it. Spotify › Settings › Playback › Crossfade.",
+                color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall)
+        }
+        Spacer(Modifier.width(10.dp))
+        SoftButton("Open Spotify", {
+            context.packageManager.getLaunchIntentForPackage("com.spotify.music")?.let(context::startActivity)
+        })
+    }
 }
