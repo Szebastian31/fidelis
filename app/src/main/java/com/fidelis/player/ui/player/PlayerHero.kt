@@ -2,6 +2,10 @@ package com.fidelis.player.ui.player
 
 import android.graphics.Bitmap
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.animation.core. Spring
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
@@ -96,21 +100,43 @@ internal fun Hero(
     LaunchedEffect(snap?.uri) { compact = false }
     val t by animateFloatAsState(if (compact) 1f else 0f, tween(420, easing = FastOutSlowInEasing), label = "compact")
     var swipeX by remember { mutableFloatStateOf(0f) }
+    // Swipes and the skip buttons send the cover off one side; the next one glides in from the other.
+    val screenW = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+    var pending by remember { mutableIntStateOf(0) }
+    val slideIn: () -> Unit = {
+        val from = pending
+        if (from != 0) {
+            pending = 0
+            scope.launch {
+                animate(-from * screenW * 0.45f, 0f, animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow)) { v, _ -> swipeX = v }
+            }
+        }
+    }
+    val slide: (Int) -> Unit = { dir ->
+        scope.launch {
+            animate(swipeX, dir * screenW, animationSpec = tween(170, easing = FastOutLinearInEasing)) { v, _ -> swipeX = v }
+            pending = dir
+            if (dir < 0) next() else prev()
+        }
+    }
+    LaunchedEffect(img) { slideIn() }
+    LaunchedEffect(snap?.uri) { if (pending != 0) { delay(250); slideIn() } }
+    LaunchedEffect(pending) { if (pending != 0) { delay(900); slideIn() } }
 
     Box(modifier.background(base)) {
         if (img != null) {
             // Ambient light: the cover, heavily blurred, behind everything.
-            Image(img, null,
+            FadeImage(img, null,
                 Modifier.fillMaxSize().blur(70.dp, BlurredEdgeTreatment.Rectangle),
                 contentScale = ContentScale.Crop,
                 colorFilter = ColorFilter.tint(wash.copy(alpha = 0.3f), BlendMode.Color))
             // The big cover from the very top. It fades into the blur briefly at the top
             // and over a longer stretch at the bottom.
-            Image(img, null,
+            CoverImage(img, null,
                 Modifier.fillMaxWidth().fillMaxHeight(0.88f)
                     .graphicsLayer {
-                        alpha = 1f - t
-                        translationX = swipeX * 0.6f
+                        alpha = (1f - t) * (1f - 0.5f * (kotlin.math.abs(swipeX) / screenW).coerceIn(0f, 1f))
+                        translationX = swipeX
                         compositingStrategy = CompositingStrategy.Offscreen
                     }
                     .drawWithContent {
@@ -140,7 +166,7 @@ internal fun Hero(
                     Modifier.fillMaxWidth(0.8f).aspectRatio(1f)
                         .graphicsLayer {
                             alpha = t; scaleX = 0.9f + 0.1f * t; scaleY = 0.9f + 0.1f * t
-                            translationX = swipeX * 0.6f
+                            translationX = swipeX
                         }
                         .shadow(28.dp, RoundedCornerShape(20.dp), ambientColor = wash, spotColor = wash)
                         .clip(RoundedCornerShape(20.dp)),
@@ -156,10 +182,8 @@ internal fun Hero(
                     detectHorizontalDragGestures(
                         onDragEnd = {
                             val x = swipeX
-                            if (x < -swipeAt) { tick(); next() } else if (x > swipeAt) { tick(); prev() }
-                            scope.launch {
-                                animate(x, 0f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { v, _ -> swipeX = v }
-                            }
+                        if (x < -swipeAt) { tick(); slide(-1) } else if (x > swipeAt) { tick(); slide(1) }
+                        else scope.launch { animate(x, 0f, animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { v, _ -> swipeX = v } }
                         },
                         onDragCancel = { swipeX = 0f },
                     ) { change, dx -> change.consume(); swipeX += dx }
@@ -217,7 +241,7 @@ internal fun Hero(
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically) {
-                PlainIcon(Icons.Rounded.SkipPrevious, "Previous", 40.dp, { tick(); onPrev() })
+                PlainIcon(Icons.Rounded.SkipPrevious, "Previous", 40.dp, { tick(); slide(1) })
                 val playing = snap?.isPaused == false
                 Box(
                     Modifier.pressable { tick(); onToggle() }.size(76.dp)
@@ -228,7 +252,7 @@ internal fun Hero(
                     Icon(if (playing) Icons.Rounded. Pause else Icons.Rounded.PlayArrow,
                         if (playing) "Pause" else "Play", tint = Color.Black, modifier = Modifier.size(38.dp))
                 }
-                PlainIcon(Icons.Rounded.SkipNext, "Next", 40.dp, { tick(); onNext() })
+                PlainIcon(Icons.Rounded.SkipNext, "Next", 40.dp, { tick(); slide(-1) })
             }
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -278,4 +302,22 @@ private fun PlainIcon(icon: ImageVector, cd: String, size: Dp, onClick: () -> Un
 private fun fmt(ms: Long): String {
     val s = (ms / 1000).coerceAtLeast(0)
     return "%d:%02d".format(s / 60, s % 60)
+}
+
+/** The ambient glow behind the player: dissolves into the next cover's colours instead of jumping. */
+@Composable
+private fun FadeImage(bitmap: ImageBitmap, contentDescription: String?, modifier: Modifier,
+                      contentScale: ContentScale, colorFilter: ColorFilter?) {
+    Crossfade(bitmap, modifier, animationSpec = tween(700), label = "ambient") { b ->
+        Image(b, contentDescription, Modifier.fillMaxSize(), contentScale = contentScale, colorFilter = colorFilter)
+    }
+}
+
+/** The big cover: a quick dissolve, so the new cover is already in place as it glides in. */
+@Composable
+private fun CoverImage(bitmap: ImageBitmap, contentDescription: String?, modifier: Modifier,
+                       contentScale: ContentScale, colorFilter: ColorFilter?) {
+    Crossfade(bitmap, modifier, animationSpec = tween(220), label = "cover") { b ->
+        Image(b, contentDescription, Modifier.fillMaxSize(), contentScale = contentScale, colorFilter = colorFilter)
+    }
 }

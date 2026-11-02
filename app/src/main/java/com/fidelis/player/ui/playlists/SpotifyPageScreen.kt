@@ -1,6 +1,8 @@
 package com.fidelis.player.ui.playlists
 
 import android.widget.Toast
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -31,7 +33,7 @@ fun SpotifyPageScreen(onBack: () -> Unit, onOpenPlayer: () -> Unit, vm: SpotifyP
     val snap by vm.nowPlaying.collectAsState()
     val src = vm.source
     val tracks = vm.tracks
-    val cover = remember(src) { src?.coverUrl() }
+    val cover = remember(src) { src?.coverUrl() } ?: tracks.firstOrNull()?.imageUrl
     var menuFor by remember { mutableStateOf<Pair<Int, QueueTrack>?>(null) }
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 
@@ -49,7 +51,7 @@ fun SpotifyPageScreen(onBack: () -> Unit, onOpenPlayer: () -> Unit, vm: SpotifyP
                     backdropUrl = cover,
                     onBack = onBack,
                     cover = {
-                        if (cover != null) AsyncImage(cover, src?.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        val bmp = vm.cover; if (bmp != null) Image(bmp.asImageBitmap(), src?.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) else if (cover != null) AsyncImage(cover, src?.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                         else Icon(Icons.Rounded.MusicNote, null, tint = Fidelis.inkFaint, modifier = Modifier.size(48.dp))
                     },
                 ) {

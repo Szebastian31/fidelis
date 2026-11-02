@@ -452,7 +452,13 @@ fun <T> List<T>.freshShuffle(artist: (T) -> String): List<T> {
 }
 
 /** Spotify app image ids ("spotify:image:…") map straight to Spotify's image server. */
-fun spotifyImageUrl(raw: String?): String? =
-    raw?.takeIf { it.startsWith("spotify:image:") }?.let { "https://i.scdn.co/image/" + it.removePrefix("spotify:image:") }
+fun spotifyImageUrl(raw: String?): String? = when {
+    raw == null -> null
+    raw.startsWith("http") -> raw
+    raw.startsWith("spotify:image:") -> "https://i.scdn.co/image/" + raw.removePrefix("spotify:image:")
+    // Spotify's own mixes use a 2×2 mosaic of four covers.
+    raw.startsWith("spotify:mosaic:") -> "https://mosaic.scdn.co/640/" + raw.removePrefix("spotify:mosaic:").split(':', ',').joinToString("")
+    else -> null
+}
 
 fun com.spotify.protocol.types.ListItem.coverUrl(): String? = spotifyImageUrl(imageUri?.raw)
