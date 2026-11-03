@@ -109,6 +109,10 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
     snap?.uri?.takeIf { addOpen }?.let { u ->
         AddToPlaylistSheet(snap?.title.orEmpty(), snap?.artist.orEmpty(), art, u, onDismiss = { addOpen = false })
     }
+    var shareOpen by remember { mutableStateOf(false) }
+    snap?.uri?.takeIf { shareOpen }?.let { u ->
+        ShareSongSheet(snap?.title.orEmpty(), snap?.artist.orEmpty(), art, u, onDismiss = { shareOpen = false })
+    }
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val list = rememberLazyListState()
@@ -201,6 +205,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                         onDevices = { devicesOpen = true },
                     onSound = { soundOpen = true },
                     onAddToPlaylist = { addOpen = true },
+                    onShare = { shareOpen = true },
                         onQueue = { scope.launch { list.animateScrollToItem(1) } },
                     )
                 }

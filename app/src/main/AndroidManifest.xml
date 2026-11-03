@@ -13,6 +13,9 @@
 
     <queries>
         <package android:name="com.spotify.music" />
+        <!-- Apps you can share a song to. -->
+        <intent><action android:name="android.intent.action.SEND" /><data android:mimeType="text/plain" /></intent>
+        <intent><action android:name="android.intent.action.SEND" /><data android:mimeType="image/png" /></intent>
     </queries>
 
     <application
@@ -52,5 +55,14 @@
         </receiver>
         <!-- Shares each day's top track and listening time with Annales, the stamp journal. Read-only; answers Annales only. -->
         <provider android:name=".annales.AnnalesProvider" android:authorities="com.fidelis.player.annales" android:exported="true" />
+        <!-- Story images for sharing, from the cache only. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.fidelis.player.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/share_paths" />
+        </provider>
+
     </application>
 </manifest>

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Radio
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
@@ -102,6 +103,7 @@ internal fun Hero(
     onLyrics: () -> Unit, onShuffle: () -> Unit, onQueue: () -> Unit,
     onArtist: () -> Unit = {}, onRadio: () -> Unit = {}, onDevices: () -> Unit = {}, onSound: () -> Unit = {},
     onAddToPlaylist: () -> Unit = {},
+    onShare: () -> Unit = {},
     next: QueueTrack? = null, prev: QueueTrack? = null,
 ) {
     val scope = rememberCoroutineScope()
@@ -272,6 +274,7 @@ internal fun Hero(
             IconCircle(Icons.Rounded.KeyboardArrowDown, "Collapse", onClick = onClose)
             Text("NOW PLAYING", color = Fidelis.inkSoft, style = MaterialTheme.typography.labelMedium,
                 textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+            if (snap?.uri != null) { IconCircle(Icons.Rounded.Share, "Share", onClick = onShare); Spacer(Modifier.width(8.dp)) }
             IconCircle(Icons.Rounded.Speaker, "Playing on", onClick = onDevices)
         }
 

@@ -21,6 +21,7 @@ https://buycoffee.to/szebastian
 - **Synced lyrics.** The current line glows and follows the song; tap any line to jump there. Lyrics come from LRCLIB, with plain lyrics when timed ones aren't available.
 - **A queue that's yours.** Play next, add to queue, drag songs into a new order, shuffle or clear Up next. **Previous** goes back through the last 10 songs you played, instead of just restarting the current one.
 - **Add to playlist.** Tap **+** next to ❤ in the player, or ⋮ › **Add to playlist** on any song: Up next, albums, artists, playlists, search and mixes. It lists the playlists you made or collaborate on.
+- **Share, Spotify style.** A card in the cover's colour, then the apps you have (Instagram Stories, WhatsApp, Telegram, Messenger…), Copy link and More. Stories get a ready-made story image; chats get an open.spotify.com link.
 - **Search everything in one bar.** Results come back as Artists, Albums and Songs.
 - **Artist pages.** Albums, then Singles & EPs, then their songs ordered by popularity on Last.fm, with play counts.
 - **Artist radio.** Mostly that artist, with songs in a similar vibe mixed in: two of theirs, then one similar.
