@@ -115,3 +115,7 @@ A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines
 - **More accurate lyrics.** LRCLIB, NetEase Cloud Music and Kugou are asked at once, and only versions whose title, artist and length fit the recording playing are kept. Timing that fits no source is dropped in favour of plain words.
 - **Word by word.** When NetEase has word timing, each word lights up as it's sung.
 - **Timing nudge and source switch.** Move lyrics earlier or later by a quarter second, or tap the source to try another. Both are remembered per song.
+
+## New in 1.8.0
+
+- **A new Mood tab: the mood dial.** One colour field, calm to hyped and dark to bright. Drag the dot anywhere, choose Just mine, A few new or Mostly new, and make the mix. Songs are scored against the three nearest feelings, so every spot gives its own blend. A new feeling, Intense, covers the heavy, dark corner.

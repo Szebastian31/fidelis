@@ -1,143 +1,90 @@
 package com.fidelis.player.ui.mood
 
+import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.fidelis.player.integration.spotify.PlaylistTrack
-import com.fidelis.player.integration.spotify.SpotifyPlaylist
 import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.SpotifyRepository
-import com.fidelis.player.mood.DiscoverPreset
 import com.fidelis.player.mood.Mix
 import com.fidelis.player.mood.MixStore
-import com.fidelis.player.mood.Mood
 import com.fidelis.player.mood.MoodRepository
-import com.fidelis.player.mood.MoodTrack
-import com.fidelis.player.mood.Source
-import com.fidelis.player.mood.Suggestion
+import com.fidelis.player.mood.Vibe
 import com.fidelis.player.mood.toQueue
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import javax.inject.Inject
-
-/** What a build-your-own mix draws from: a library source or one of your playlists. */
-sealed interface Pick {
-    val label: String
-    val key: String
-    data class FromSource(val source: Source) : Pick {
-        override val label get() = source.label
-        override val key get() = "s:${source.name}"
-    }
-    data class FromPlaylist(val playlist: SpotifyPlaylist) : Pick {
-        override val label get() = playlist.name
-        override val key get() = "p:${playlist.id}"
-    }
-}
 
 @HiltViewModel
 class MoodViewModel @Inject constructor(
+    @ApplicationContext context: Context,
     private val repo: SpotifyRepository,
     private val moodRepo: MoodRepository,
     private val store: MixStore,
     private val remote: SpotifyRemote,
 ) : ViewModel() {
+    private val prefs = context.getSharedPreferences("mood_dial", Context.MODE_PRIVATE)
     val connected = repo.connected
-    val nowPlaying = remote.state
-    val artwork = remote.artwork
     val progress = moodRepo.progress
     val mixes = store.mixes
-    val suggestions: List<Suggestion> = Suggestion.presets
-    val discover: List<DiscoverPreset> = DiscoverPreset.presets
 
-    var picks by mutableStateOf(sourcePicks(emptyList())); private set
-    var selected by mutableStateOf<Pick>(Pick.FromSource(Source.EVERYTHING)); private set
-    var selectedMood by mutableStateOf<Mood?>(null); private set
-    var includeNew by mutableStateOf(true); private set
-
-    /** Title of the mix being built right now, or null. */
-    var building by mutableStateOf<String?>(null); private set
+    /** Where the dot is. It starts where you left it, or where the time of day suggests. */
+    var vibe by mutableStateOf(Vibe.parse(prefs.getString("last", null)) ?: suggested()); private set
+    /** How much of the mix is new to you: 0 just mine, 1 a few new, 2 mostly new. */
+    var share by mutableIntStateOf(prefs.getInt("share", 1).coerceIn(0, 2)); private set
+    var building by mutableStateOf(false); private set
     var note by mutableStateOf<String?>(null); private set
     /** Set when a mix is ready; the screen opens it, then calls [consumeOpen]. */
     var openMix by mutableStateOf<String?>(null); private set
 
-    private fun sourcePicks(playlists: List<SpotifyPlaylist>): List<Pick> =
-        Source.entries.map { Pick.FromSource(it) } + playlists.map { Pick.FromPlaylist(it) }
+    val shares = listOf("Just mine", "A few new", "Mostly new")
+    private val amounts = listOf(0f, 0.3f, 0.6f)
 
-    fun load() { viewModelScope.launch { picks = sourcePicks(repo.fetchPlaylists()) } }
+    fun move(x: Float, y: Float) { vibe = Vibe(x.coerceIn(-1f, 1f), y.coerceIn(-1f, 1f)); note = null }
 
-    fun select(p: Pick) { selected = p }
-    fun pickMood(m: Mood) { selectedMood = if (selectedMood == m) null else m }
-    fun toggleNew() { includeNew = !includeNew }
-    val canCreate get() = selectedMood != null || includeNew
+    /** Remembers the spot once you let go. */
+    fun settle() { prefs.edit().putString("last", vibe.encode()).apply() }
 
-    fun existing(title: String): Mix? = mixes.value.firstOrNull { it.title == title }
+    fun pickShare(i: Int) { share = i; prefs.edit().putInt("share", i).apply() }
 
-    fun runSuggestion(s: Suggestion) =
-        create(s.title, s.subtitle, "Not enough listening history for this one yet.") {
-            when (s) {
-                Suggestion.OnRepeat -> moodRepo.topMix("short_term")
-                Suggestion.HalfYear -> moodRepo.topMix("medium_term")
-                Suggestion.Rediscover -> moodRepo.rediscover()
-                is Suggestion.MoodMix -> moodRepo.build(Source.EVERYTHING, s.mood)
-            }
-        }
-
-    fun runDiscover(d: DiscoverPreset) =
-        create(d.title, d.subtitle, "Couldn't find new songs right now. Check your connection and Last.fm key.") {
-            moodRepo.discover(d.mood)
-        }
-
-    fun createCustom() {
-        val pick = selected
-        val mood = selectedMood
-        if (!canCreate) return
-        val title = listOfNotNull(mood?.label, pick.label).joinToString(" · ") + if (includeNew) " + new" else ""
-        val subtitle = buildString {
-            append(if (mood != null) "${mood.label} picks from ${pick.label}" else "From ${pick.label}")
-            if (includeNew) append(", with new songs")
-        }
-        val empty = if (pick is Pick.FromPlaylist)
-            "Nothing fit. Spotify only shares songs from playlists you created, so try one of yours or Everything."
-        else "Nothing fit in ${pick.label}. Try Everything or a different mood."
-        create(title, subtitle, empty) {
-            val base: List<PlaylistTrack>? = when (pick) {
-                is Pick.FromPlaylist -> repo.fetchPlaylistTracks(pick.playlist.id).take(200)
-                is Pick.FromSource -> sourceTracks(pick.source)
-            }
-            when {
-                includeNew -> moodRepo.discover(mood, base)
-                mood != null && pick is Pick.FromSource -> moodRepo.build(pick.source, mood)
-                mood != null && pick is Pick.FromPlaylist -> moodRepo.buildFromPlaylist(pick.playlist.id, mood)
-                else -> emptyList()
-            }
-        }
+    private fun suggested(): Vibe = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
+        in 5..10 -> Vibe(0.45f, 0.35f)
+        in 11..16 -> Vibe(0.3f, -0.35f)
+        in 17..21 -> Vibe(0.4f, 0.55f)
+        else -> Vibe(-0.45f, -0.5f)
     }
 
-    private suspend fun sourceTracks(s: Source): List<PlaylistTrack>? = when (s) {
-        Source.EVERYTHING -> null // whole library
-        Source.LIKED -> repo.fetchLikedTracks(300)
-        Source.RECENT -> repo.fetchRecentlyPlayed()
-        Source.TOP_MONTH -> repo.fetchTopTracks("short_term")
-        Source.TOP_HALF -> repo.fetchTopTracks("medium_term")
-        Source.TOP_ALL -> repo.fetchTopTracks("long_term")
-    }
-
-    private fun create(title: String, subtitle: String, emptyNote: String, block: suspend () -> List<MoodTrack>) {
-        if (building != null) return
+    fun make() {
+        if (building) return
+        val v = vibe
+        val i = share
         viewModelScope.launch {
-            building = title; note = null
-            val result = runCatching { block() }.getOrDefault(emptyList())
-            if (result.isEmpty()) note = emptyNote
-            else openMix = store.add(title, subtitle, result).id
-            building = null
+            building = true; note = null
+            settle()
+            val tracks = runCatching { moodRepo.vibe(v, amounts[i]) }.getOrDefault(emptyList())
+            if (tracks.isEmpty()) {
+                note = "Nothing in your listening fits this spot yet. Move the dot a little, or add new songs."
+            } else {
+                val sub = v.nearest.blurb + when (i) { 0 -> " · your songs"; 1 -> " · with a few new ones"; else -> " · mostly new to you" }
+                val mix = store.add(v.name + if (i == 2) " · new" else "", sub, tracks)
+                prefs.edit().putString("mix:${mix.id}", v.encode()).apply()
+                openMix = mix.id
+            }
+            building = false
         }
     }
+
+    /** The dial spot a saved mix was made at, for its colour. Null for mixes from before the dial. */
+    fun vibeOf(m: Mix): Vibe? = Vibe.parse(prefs.getString("mix:${m.id}", null))
 
     fun consumeOpen() { openMix = null }
 
     fun playMix(m: Mix) { if (m.tracks.isNotEmpty()) remote.playQueue(m.tracks.map { it.toQueue() }, 0) }
-    fun togglePlay() { if (nowPlaying.value?.isPaused == true) remote.resume() else remote.pause() }
+
     fun authUrl(): String = repo.authUrl()
 }

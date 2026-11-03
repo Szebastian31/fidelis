@@ -207,6 +207,76 @@ class MoodRepository @Inject constructor(
             }
         }
 
+    /**
+     * A mix for a spot on the mood dial. [share] is how much of it is new to you, from 0 to about 0.6.
+     * Your songs that fit come first, then songs Last.fm finds similar to them, spread evenly through.
+     */
+    suspend fun vibe(v: Vibe, share: Float, limit: Int = 36): List<MoodTrack> = withContext(Dispatchers.IO) {
+        val library = tracksFor(Source.EVERYTHING)
+        if (library.isEmpty()) return@withContext emptyList()
+        try {
+            val ownTarget = (limit * (1 - share)).toInt().coerceAtLeast(8)
+            // 1) Your songs: a cheap pass on artist tags, then song tags for the best fits.
+            val artists = library.map { it.artist }.filter { it.isNotBlank() }.distinct()
+            val byArtist = fetchAll("Reading your artists", artists) { artistTags(it) }
+            val shortlist = library.map { it to v.score(byArtist[it.artist].orEmpty()) }
+                .filter { it.second > 2f }.sortedByDescending { it.second }.map { it.first }
+                .take(ownTarget + 24)
+            val byTrack = fetchAll("Reading your songs", shortlist) { trackTags(it.artist, it.title) }
+            val tagByUri = HashMap<String, Set<String>>()
+            val own = shortlist.map { t ->
+                val tags = byTrack[t].orEmpty()
+                tagByUri[t.uri] = tags.toSet()
+                MoodTrack(t.uri, t.title, t.artist, v.score(tags).toInt(), tags.filter { it in v.tagWeights }.take(3), t.imageUrl)
+            }.filter { it.score > 2 }.sortedByDescending { it.score }.capPerArtist(2) { it.artist }.take(ownTarget)
+            if (own.isEmpty()) return@withContext emptyList()
+            val mine = flowOrder(own, tagByUri)
+            if (share <= 0f) return@withContext mine
+
+            // 2) New songs like your best fits, kept when their artist suits this spot.
+            val known = library.map { key(it.artist, it.title) }.toHashSet()
+            val knownUris = library.map { it.uri }.toHashSet()
+            val similar = fetchAll("Finding new songs", own.take(10)) { s ->
+                lastfmApi.getSimilar(s.artist, cleanTitle(s.title), 25)
+            }
+            val counts = HashMap<String, Pair<Pair<String, String>, Int>>()
+            similar.values.flatten().forEach { (a, t) ->
+                val k = key(a, t)
+                if (k in known) return@forEach
+                val prev = counts[k]
+                counts[k] = (a to t) to ((prev?.second ?: 0) + 1)
+            }
+            val ranked = counts.values.sortedByDescending { it.second }.map { it.first }
+                .distinctBy { it.first.lowercase() }.take(limit)
+            val tags = fetchAll("Checking the mood", ranked.map { it.first }.distinct()) { artistTags(it) }
+            val candidates = ranked.filter { v.score(tags[it.first].orEmpty()) > 2f }
+            val need = limit - mine.size
+            val found = fetchAll("Matching on Spotify", candidates.take(need + 6), permits = 3) { (a, t) ->
+                listOfNotNull(spotify.findTrack(a, t))
+            }
+            val fresh = candidates.mapNotNull { found[it]?.firstOrNull() }
+                .filter { it.uri !in knownUris }
+                .distinctBy { it.uri }
+                .take(need)
+                .map { MoodTrack(it.uri, it.title, it.artist, 0, listOf("new for you"), it.imageUrl, isNew = true) }
+
+            // 3) Spread the new songs evenly through yours.
+            val total = minOf(limit, mine.size + fresh.size)
+            val every = (mine.size + fresh.size).toFloat() / fresh.size.coerceAtLeast(1)
+            val out = ArrayList<MoodTrack>()
+            var i = 0; var j = 0
+            while (out.size < total && (i < mine.size || j < fresh.size)) {
+                val newTurn = j < fresh.size && (i >= mine.size || out.size + 1 >= ((j + 1) * every).toInt())
+                if (newTurn) out += fresh[j++] else out += mine[i++]
+            }
+            out
+        } finally {
+            cache.save()
+            _progress.value = null
+        }
+    }
+
+
     fun play(tracks: List<MoodTrack>, startIndex: Int = 0) =
         remote.playQueue(tracks.map { it.toQueue() }, startIndex)
 
