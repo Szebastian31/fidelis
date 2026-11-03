@@ -1,17 +1,20 @@
 package com.fidelis.player.ui.player
 
 import android.graphics.Bitmap
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -50,15 +53,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector. ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -67,18 +70,26 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.fidelis.player.integration.spotify.QueueTrack
 import com.fidelis.player.integration.spotify.SpotifyRemote
+import com.fidelis.player.integration.spotify.spotifyImageUrl
 import com.fidelis.player.ui.theme.Fidelis
 import com.fidelis.player.ui.theme.IconCircle
 import com.fidelis.player.ui.theme.pressable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+
+/** One cover page. [image] is a cover address or Spotify's own Bitmap. */
+private data class Page(val uri: String?, val title: String, val artist: String, val image: Any?)
 
 /**
- * Full-screen first page of the player. The cover runs to the very top, melting into a blur
- * under the status bar and into a solid wash under the controls. Tap it to see it whole
- * (it grows back after 5s or another tap); swipe it for next / previous.
+ * Full-screen first page of the player. The previous and next covers wait on either side, already
+ * loaded: dragging dissolves one into the other under your finger, and a skip never waits for Spotify.
+ * Tap the cover to see it whole (it grows back after 5s or another tap).
  */
 @Composable
 internal fun Hero(
@@ -91,81 +102,120 @@ internal fun Hero(
     onLyrics: () -> Unit, onShuffle: () -> Unit, onQueue: () -> Unit,
     onArtist: () -> Unit = {}, onRadio: () -> Unit = {}, onDevices: () -> Unit = {}, onSound: () -> Unit = {},
     onAddToPlaylist: () -> Unit = {},
+    next: QueueTrack? = null, prev: QueueTrack? = null,
 ) {
-    val img = remember(art) { art?.asImageBitmap() }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val tick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
-    val swipeAt = with(LocalDensity.current) { 90.dp.toPx() }
-    val next by rememberUpdatedState(onNext)
-    val prev by rememberUpdatedState(onPrev)
-    var compact by remember { mutableStateOf(false) }
-    LaunchedEffect(compact) { if (compact) { delay(5_000); compact = false } }
-    LaunchedEffect(snap?.uri) { compact = false }
-    val t by animateFloatAsState(if (compact) 1f else 0f, tween(420, easing = FastOutSlowInEasing), label = "compact")
+    val density = LocalDensity.current
+    val width = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+    val swipeAt = with(density) { 72.dp.toPx() }
 
-    var swipeX by remember { mutableFloatStateOf(0f) }
-    var fade by remember { mutableFloatStateOf(1f) }
-    // Skips (swipe or buttons) fade the cover out as it drifts away; the next one fades in
-    // as it settles from the other side, so one song dissolves into the next.
-    val screenW = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
-    var pending by remember { mutableIntStateOf(0) }
-    var leaving by remember { mutableStateOf<Job?>(null) }
-    var arriving by remember { mutableStateOf<Job?>(null) }
-    val fadeIn: () -> Unit = {
-        val from = pending
-        if (from != 0) {
-            pending = 0
-            arriving = scope.launch {
-                leaving?.join()
-                swipeX = -from * screenW * 0.08f
-                launch { animate(fade, 1f, animationSpec = tween(480, easing = LinearOutSlowInEasing)) { v, _ -> fade = v } }
-                animate(swipeX, 0f, animationSpec = tween(560, easing = FastOutSlowInEasing)) { v, _ -> swipeX = v }
+    // Once a song's cover is on screen it keeps the same source, so nothing reloads or flashes.
+    val covers = remember { LinkedHashMap<String, Any>() }
+    fun cover(uri: String?, candidate: Any?): Any? {
+        if (uri.isNullOrBlank()) return candidate
+        covers[uri]?.let { return it }
+        if (candidate != null) {
+            covers[uri] = candidate
+            if (covers.size > 16) covers.remove(covers.keys.first())
+        }
+        return candidate
+    }
+    val live = Page(snap?.uri, snap?.title.orEmpty(), snap?.artist.orEmpty(),
+        cover(snap?.uri, spotifyImageUrl(snap?.imageUri) ?: art))
+    val nextPage = next?.let { Page(it.uri, it.title, it.artist, cover(it.uri, it.imageUrl)) }
+    val prevPage = prev?.let { Page(it.uri, it.title, it.artist, cover(it.uri, it.imageUrl)) }
+
+    // After a skip the new song shows at once; this holds it until Spotify reports it too.
+    var optimistic by remember { mutableStateOf<Page?>(null) }
+    var skipFrom by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(snap?.uri, optimistic) {
+        val o = optimistic ?: return@LaunchedEffect
+        val arrived = if (o.uri == null) snap?.uri != skipFrom else snap?.uri == o.uri
+        if (arrived) optimistic = null else { delay(5_000); optimistic = null }
+    }
+    val current = optimistic ?: live
+
+    val offset = remember { Animatable(0f) }
+    var leaving by remember { mutableStateOf<Page?>(null) }
+    var flying by remember { mutableStateOf<Page?>(null) }
+    var dir by remember { mutableIntStateOf(-1) }
+    var job by remember { mutableStateOf<Job?>(null) }
+    val nowLive by rememberUpdatedState(live)
+    val nowNext by rememberUpdatedState(nextPage)
+    val nowPrev by rememberUpdatedState(prevPage)
+    val nextCb by rememberUpdatedState(onNext)
+    val prevCb by rememberUpdatedState(onPrev)
+
+    val land: suspend () -> Unit = {
+        flying?.let { optimistic = it }
+        flying = null; leaving = null
+        offset.snapTo(0f)
+    }
+    // d = -1 next (the cover leaves to the left), 1 previous.
+    val go: (Int, Float) -> Unit = { d, velocity ->
+        if (d > 0 && nowPrev == null) {
+            // Nothing earlier: Spotify restarts this song. A small bounce says so.
+            tick(); prevCb()
+            scope.launch {
+                offset.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 420f),
+                    initialVelocity = if (velocity == 0f) 2200f else velocity)
+            }
+        } else {
+            val wasFlying = job?.isActive == true
+            job?.cancel()
+            tick()
+            job = scope.launch {
+                if (wasFlying || flying != null) land()
+                val target = (if (d < 0) nowNext else nowPrev) ?: Page(null, "", "", null)
+                skipFrom = nowLive.uri
+                leaving = optimistic ?: nowLive
+                flying = target
+                dir = d
+                // Spotify starts loading right away, while the covers dissolve.
+                if (d < 0) nextCb() else prevCb()
+                offset.animateTo(d * width, spring(dampingRatio = 1f, stiffness = 210f), initialVelocity = velocity)
+                land()
             }
         }
     }
-    val slide: (Int) -> Unit = { dir ->
-        arriving?.cancel(); leaving?.cancel()
-        pending = dir
-        leaving = scope.launch {
-            launch { animate(fade, 0f, animationSpec = tween(240, easing = FastOutLinearInEasing)) { v, _ -> fade = v } }
-            animate(swipeX, swipeX + dir * screenW * 0.12f, animationSpec = tween(260, easing = FastOutSlowInEasing)) { v, _ -> swipeX = v }
-        }
-        // Ask Spotify straight away, so the next song loads while the cover fades.
-        if (dir < 0) next() else prev()
-    }
-    LaunchedEffect(img) { fadeIn() }
-    LaunchedEffect(snap?.uri) { if (pending != 0) { delay(450); fadeIn() } }
-    LaunchedEffect(pending) { if (pending != 0) { delay(1_000); fadeIn() } }
+    val goNow by rememberUpdatedState(go)
+
+    var compact by remember { mutableStateOf(false) }
+    val shown = flying ?: current
+    LaunchedEffect(compact) { if (compact) { delay(5_000); compact = false } }
+    LaunchedEffect(shown.uri) { compact = false }
+    val t by animateFloatAsState(if (compact) 1f else 0f, tween(420, easing = FastOutSlowInEasing), label = "compact")
+    val tint = ColorFilter.tint(wash.copy(alpha = 0.22f), BlendMode.Color)
+
+    // Pages on screen, each keyed by song so its picture survives when it moves to the middle.
+    val pages: List<Pair<Page, Float>> = run {
+        val l = leaving; val f = flying
+        if (l != null && f != null) listOf(l to 0f, f to -dir.toFloat())
+        else listOfNotNull(prevPage?.let { it to -1f }, current to 0f, nextPage?.let { it to 1f })
+    }.distinctBy { it.first.uri ?: "blank" }
 
     Box(modifier.background(base)) {
-        if (img != null) {
-            // Ambient light: the cover, heavily blurred, behind everything.
-            FadeImage(img, null,
-                Modifier.fillMaxSize().blur(70.dp, BlurredEdgeTreatment.Rectangle),
-                contentScale = ContentScale.Crop,
-                colorFilter = ColorFilter.tint(wash.copy(alpha = 0.3f), BlendMode.Color))
-            // The big cover from the very top. It fades into the blur briefly at the top
-            // and over a longer stretch at the bottom.
-            CoverImage(img, null,
-                Modifier.fillMaxWidth().fillMaxHeight(0.88f)
-                    .graphicsLayer {
-                        alpha = (1f - t) * fade * (1f - 0.4f * (kotlin.math.abs(swipeX) / screenW).coerceIn(0f, 1f))
-                        translationX = swipeX
-                        compositingStrategy = CompositingStrategy.Offscreen
-                    }
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(
-                            Brush.verticalGradient(
-                                0f to Color.Transparent, 0.11f to Color.Black,
-                                0.52f to Color.Black, 1f to Color.Transparent,
-                            ),
-                            blendMode = BlendMode.DstIn,
-                        )
-                    },
-                contentScale = ContentScale.Crop,
-                colorFilter = ColorFilter.tint(wash.copy(alpha = 0.22f), BlendMode.Color))
+        // Ambient light: the settled cover, small and heavily blurred, dissolving slowly between songs.
+        Crossfade(shown.image, Modifier.fillMaxSize(), animationSpec = tween(900), label = "ambient") { img ->
+            if (img != null) Ambient(img, tint = ColorFilter.tint(wash.copy(alpha = 0.3f), BlendMode.Color))
+        }
+        // The covers from the very top, fading into the blur briefly at the top and longer at the bottom.
+        Box(
+            Modifier.fillMaxWidth().fillMaxHeight(0.88f)
+                .graphicsLayer { alpha = 1f - t; compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        Brush.verticalGradient(0f to Color.Transparent, 0.11f to Color.Black, 0.52f to Color.Black, 1f to Color.Transparent),
+                        blendMode = BlendMode.DstIn,
+                    )
+                },
+        ) {
+            for ((page, slot) in pages) key(page.uri ?: "blank") {
+                CoverPage(page, slot, { offset.value }, width, tint)
+            }
         }
         // Readable status bar and controls; solid at the very bottom so nothing shows through.
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(
@@ -174,34 +224,46 @@ internal fun Hero(
         )))
 
         // Tapped: the whole cover as a card.
-        if (img != null && t > 0f) {
+        if (t > 0f && shown.image != null) {
             Box(Modifier.fillMaxWidth().fillMaxHeight(0.62f).statusBarsPadding().padding(top = 64.dp),
                 contentAlignment = Alignment.Center) {
-                Image(img, "Album artwork",
+                AsyncImage(shown.image, "Album artwork",
                     Modifier.fillMaxWidth(0.8f).aspectRatio(1f)
-                        .graphicsLayer {
-                            alpha = t * fade; scaleX = 0.9f + 0.1f * t; scaleY = 0.9f + 0.1f * t
-                            translationX = swipeX
-                        }
+                        .graphicsLayer { alpha = t; scaleX = 0.9f + 0.1f * t; scaleY = 0.9f + 0.1f * t }
                         .shadow(28.dp, RoundedCornerShape(20.dp), ambientColor = wash, spotColor = wash)
                         .clip(RoundedCornerShape(20.dp)),
                     contentScale = ContentScale.Crop)
             }
         }
 
-        // Gestures on the cover: tap to toggle the full view, swipe for next / previous.
+        // Gestures on the cover: tap for the full view, drag for next / previous.
+        val tracker = remember { VelocityTracker() }
         Box(
             Modifier.fillMaxWidth().fillMaxHeight(0.62f)
                 .pointerInput(Unit) { detectTapGestures { compact = !compact } }
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
+                        onDragStart = { tracker.resetTracking() },
                         onDragEnd = {
-                            val x = swipeX
-                            if (x < -swipeAt) { tick(); slide(-1) } else if (x > swipeAt) { tick(); slide(1) }
-                            else scope.launch { animate(x, 0f, animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { v, _ -> swipeX = v } }
+                            if (job?.isActive == true) return@detectHorizontalDragGestures
+                            val v = tracker.calculateVelocity().x
+                            val x = offset.value
+                            when {
+                                x < 0 && (x < -swipeAt || v < -900f) -> goNow(-1, v)
+                                x > 0 && (x > swipeAt || v > 900f) && nowPrev != null -> goNow(1, v)
+                                else -> scope.launch { offset.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 380f), initialVelocity = v) }
+                            }
                         },
-                        onDragCancel = { swipeX = 0f },
-                    ) { change, dx -> change.consume(); swipeX += dx }
+                        onDragCancel = { scope.launch { offset.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 380f)) } },
+                    ) { change, dx ->
+                        if (job?.isActive == true) return@detectHorizontalDragGestures
+                        change.consume()
+                        tracker.addPosition(change.uptimeMillis, change.position)
+                        val x = offset.value
+                        // Nothing to go back to: resist like a rubber band.
+                        val target = if (x + dx > 0 && nowPrev == null) x + dx * 0.3f else x + dx
+                        scope.launch { offset.snapTo(target) }
+                    }
                 },
         )
 
@@ -218,11 +280,22 @@ internal fun Hero(
                 .padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Title and artist dissolve into the next song's instead of jumping.
-                Crossfade(snap?.title.orEmpty() to snap?.artist.orEmpty(), Modifier.weight(1f),
-                    animationSpec = tween(380), label = "title") { (title, artist) ->
+                // Title and artist slide across in the direction of the skip.
+                AnimatedContent(
+                    targetState = shown.title to shown.artist,
+                    modifier = Modifier.weight(1f),
+                    transitionSpec = {
+                        val d = dir
+                        (fadeIn(tween(360, delayMillis = 80)) +
+                            slideInHorizontally(tween(460, easing = FastOutSlowInEasing)) { -d * it / 10 })
+                            .togetherWith(fadeOut(tween(160)) +
+                                slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { d * it / 14 })
+                            .using(SizeTransform(clip = false))
+                    },
+                    label = "title",
+                ) { (title, artist) ->
                     Column {
-                        Text(title.ifBlank { "Nothing playing" }, color = Color.White,
+                        Text(title.ifBlank { " " }, color = Color.White,
                             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp),
                             maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.height(2.dp))
@@ -239,7 +312,7 @@ internal fun Hero(
                 Spacer(Modifier.width(8.dp))
                 if (snap?.uri != null) {
                     Box(Modifier.pressable { tick(); onAddToPlaylist() }.size(44.dp), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded. AddCircleOutline, "Add to playlist", tint = Color.White,
+                        Icon(Icons.Rounded.AddCircleOutline, "Add to playlist", tint = Color.White,
                             modifier = Modifier.size(26.dp))
                     }
                 }
@@ -265,7 +338,7 @@ internal fun Hero(
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically) {
-                PlainIcon(Icons.Rounded.SkipPrevious, "Previous", 40.dp, { tick(); slide(1) })
+                PlainIcon(Icons.Rounded.SkipPrevious, "Previous", 40.dp, { goNow(1, 0f) })
                 val playing = snap?.isPaused == false
                 Box(
                     Modifier.pressable { tick(); onToggle() }.size(76.dp)
@@ -273,21 +346,53 @@ internal fun Hero(
                         .clip(CircleShape).background(Color.White),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(if (playing) Icons. Rounded.Pause else Icons.Rounded.PlayArrow,
+                    Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         if (playing) "Pause" else "Play", tint = Color.Black, modifier = Modifier.size(38.dp))
                 }
-                PlainIcon(Icons.Rounded.SkipNext, "Next", 40.dp, { tick(); slide(-1) })
+                PlainIcon(Icons.Rounded.SkipNext, "Next", 40.dp, { goNow(-1, 0f) })
             }
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 PlainIcon(Icons.Rounded.ChatBubbleOutline, "Lyrics", 24.dp, onLyrics, Fidelis.inkSoft)
                 PlainIcon(Icons.Rounded.Shuffle, "Shuffle Up next", 24.dp, onShuffle, Fidelis.inkSoft)
-                PlainIcon(Icons.Rounded. Radio, "Start song radio", 24.dp, onRadio, Fidelis.inkSoft)
+                PlainIcon(Icons.Rounded.Radio, "Start song radio", 24.dp, onRadio, Fidelis.inkSoft)
                 PlainIcon(Icons.Rounded.Tune, "Sound", 24.dp, onSound, Fidelis.inkSoft)
                 PlainIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Up next", 24.dp, onQueue, Fidelis.inkSoft)
             }
         }
     }
+}
+
+/**
+ * A cover at [slot] (-1 previous, 0 current, 1 next) shifted by the drag. It drifts a third as far as
+ * your finger and fades as it goes, so neighbouring covers dissolve into each other.
+ */
+@Composable
+private fun CoverPage(page: Page, slot: Float, x: () -> Float, width: Float, tint: ColorFilter) {
+    val context = LocalContext.current
+    val request = remember(page.image) { ImageRequest.Builder(context).data(page.image).crossfade(320).build() }
+    AsyncImage(
+        request, null,
+        Modifier.fillMaxSize().graphicsLayer {
+            val px = x() + slot * width
+            val a = (abs(px) / width).coerceIn(0f, 1f)
+            translationX = px * 0.34f
+            alpha = if (a >= 0.999f) 0f else (1f - a) * (1f - a * 0.25f)
+            val s = 1f + 0.05f * a
+            scaleX = s; scaleY = s
+        },
+        contentScale = ContentScale.Crop,
+        colorFilter = tint,
+    )
+}
+
+/** The cover as soft light: drawn tiny and blurred, so it costs little to dissolve. */
+@Composable
+private fun Ambient(image: Any, tint: ColorFilter) {
+    val context = LocalContext.current
+    val request = remember(image) { ImageRequest.Builder(context).data(image).size(96).build() }
+    AsyncImage(request, null, Modifier.fillMaxSize().blur(48.dp, BlurredEdgeTreatment.Rectangle),
+        contentScale = ContentScale.Crop, colorFilter = tint)
 }
 
 /** Thin white progress line without a thumb; it thickens while you drag. Tap or drag to seek. */
@@ -326,22 +431,4 @@ private fun PlainIcon(icon: ImageVector, cd: String, size: Dp, onClick: () -> Un
 private fun fmt(ms: Long): String {
     val s = (ms / 1000).coerceAtLeast(0)
     return "%d:%02d".format(s / 60, s % 60)
-}
-
-/** The ambient glow behind the player: dissolves slowly into the next cover's colours. */
-@Composable
-private fun FadeImage(bitmap: ImageBitmap, contentDescription: String?, modifier: Modifier,
-                      contentScale: ContentScale, colorFilter: ColorFilter?) {
-    Crossfade(bitmap, modifier, animationSpec = tween(900), label = "ambient") { b ->
-        Image(b, contentDescription, Modifier.fillMaxSize(), contentScale = contentScale, colorFilter = colorFilter)
-    }
-}
-
-/** The big cover: a soft dissolve when a song ends on its own; skips also fade the whole cover. */
-@Composable
-private fun CoverImage(bitmap: ImageBitmap, contentDescription: String?, modifier: Modifier,
-                       contentScale: ContentScale, colorFilter: ColorFilter?) {
-    Crossfade(bitmap, modifier, animationSpec = tween(600), label = "cover") { b ->
-        Image(b, contentDescription, Modifier.fillMaxSize(), contentScale = contentScale, colorFilter = colorFilter)
-    }
 }

@@ -188,6 +188,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                     Hero(
                         modifier = Modifier.fillParentMaxSize(),
                         snap = snap, art = art, wash = wash, base = base, liked = liked,
+                        next = queue.firstOrNull()?.track, prev = history.lastOrNull(),
                         position = position, duration = duration,
                         onClose = close, onToggleLike = vm::toggleLike,
                         onPrev = vm::prev, onToggle = vm::togglePlay, onNext = vm::next,
