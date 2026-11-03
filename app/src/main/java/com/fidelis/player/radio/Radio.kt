@@ -1,6 +1,7 @@
 package com.fidelis.player.radio
 
 import android.content.ComponentName
+import com.fidelis.player.widget.HomeWidget
 import android.content.Context
 import android.widget. Toast
 import androidx.compose.runtime.getValue
@@ -38,6 +39,7 @@ object Radio {
         override fun onEvents(player: Player, events: Player.Events) {
             playing = player.isPlaying
             buffering = player.playWhenReady && player.playbackState == Player.STATE_BUFFERING
+            changed()
         }
         override fun onPlayerError(error: PlaybackException) {
             buffering = false
@@ -72,6 +74,7 @@ object Radio {
         val item = MediaItem.Builder().setMediaId(s.id).setUri(s.stream.toUri()).setMediaMetadata(meta)
             .apply { if (s.hls) setMimeType(MimeTypes.APPLICATION_M3U8) }.build()
         withController(context) { c -> c.setMediaItem(item); c.prepare(); c.play() }
+        changed()
     }
 
     /** Pause, or pick the broadcast up again live rather than where you left it. */
@@ -80,8 +83,12 @@ object Radio {
         else if (c.mediaItemCount > 0) { c.stop(); c.prepare(); c.play() }
     }
 
+    /** Keeps the home screen widget in step. */
+    private fun changed() { app?.let { HomeWidget.update(it) } }
+
     fun stop() {
         controller?.run { stop(); clearMediaItems() }
         station = null; onAir = null; playing = false; buffering = false
+        changed()
     }
 }

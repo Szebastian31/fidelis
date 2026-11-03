@@ -25,6 +25,7 @@ import com.fidelis.player.R
 import com.fidelis.player.integration.spotify.QueueEntry
 import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.ui.theme.Fidelis
+import com.fidelis.player.widget.HomeWidget
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -85,6 +86,7 @@ class PlaybackService : Service() {
             combine(remote.state, remote.artwork, remote.liked, remote.queue) { s, a, l, q -> Frame(s, a, l, q) }
                 .collect { f ->
                     updateSession(f)
+                    HomeWidget.spotify(this@PlaybackService, f.snap?.title, f.snap?.artist, f.art, f.snap?.isPaused == false)
                     startForegroundCompat(buildNotification(f))
                 }
         }

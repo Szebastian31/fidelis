@@ -17,6 +17,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.fidelis.player.MainActivity
 import com.fidelis.player.R
+import com.fidelis.player.widget.HomeWidget
 
 /**
  * Plays live radio in the background, with the lock-screen card and notification. It takes audio
@@ -43,7 +44,7 @@ class RadioService : MediaSessionService() {
             override fun onMetadata(metadata: Metadata) {
                 for (i in 0 until metadata.length()) {
                     val e = metadata.get(i)
-                    if (e is IcyInfo) e.title?.trim()?.takeIf { it.length > 1 }?.let { Radio.onAir = it }
+                    if (e is IcyInfo) e.title?.trim()?.takeIf { it.length > 1 }?.let { Radio.onAir = it; HomeWidget.update(this@RadioService) }
                 }
             }
         })

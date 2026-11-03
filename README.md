@@ -92,3 +92,9 @@ A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines
 **Build and install:** push to `main`, then run `tools/install.sh`. **Screenshots:** `tools/screenshots.sh`, or `tools/screenshots.sh --banner-only` to rebuild just the banner.
 
 </details>
+
+## New in 1.5.0
+
+- **Save the song on air.** When a station shows what's playing, tap the search button to find it on Spotify, then like it, add it to a playlist or play it.
+- **Home screen widget.** The song or station on now, on its own colour from the cover, with play, pause and skip.
+- **Radio globe.** A spinning Earth with a dot for every place that has radio, like Radio Garden. Drag, pinch, tap a dot to tune in, or shuffle to land somewhere new.

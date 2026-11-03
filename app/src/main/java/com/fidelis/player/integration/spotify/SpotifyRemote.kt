@@ -156,7 +156,16 @@ class SpotifyRemote @Inject constructor() {
             .setErrorCallback { if (likedUri == uri) _liked.value = !now }
     }
 
-    /** Keeps our model in step when the playing song changes. */
+    /** Saves any song to Liked Songs, such as one heard on the radio. */
+    fun like(uri: String, done: (Boolean) -> Unit) {
+        val api = appRemote?.userApi ?: return done(false)
+        val r = api.addToLibrary(uri)
+        r.setResultCallback { done(true) }
+        r.setErrorCallback { done(false) }
+    }
+
+    
+/** Keeps our model in step when the playing song changes. */
     private fun reconcile(s: Snapshot) {
         expecting?.let { exp ->
             if (s.matches(exp)) { expecting = null; return }

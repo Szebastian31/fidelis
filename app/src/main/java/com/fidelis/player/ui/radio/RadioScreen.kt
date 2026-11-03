@@ -147,10 +147,13 @@ private fun RadioHome(toggle: @Composable () -> Unit) {
     }
     var browse by remember { mutableStateOf<Browse?>(null) }
     BackHandler(browse != null) { browse = null }
+    var globe by rememberSaveable { mutableStateOf(false) }
+    BackHandler(globe) { globe = false }
 
     FidelisBackground {
         val b = browse
-        if (b != null) BrowsePage(b) { browse = null }
+        if (globe) GlobePage { globe = false }
+        else if (b != null) BrowsePage(b) { browse = null }
         else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = chromeBottom())) {
             item { Box(Modifier.padding(horizontal = 20.dp)) { ScreenHeader("Listen", eyebrow = "Radio") { toggle() } } }
             item { SearchField(query) { query = it } }
@@ -163,14 +166,14 @@ private fun RadioHome(toggle: @Composable () -> Unit) {
                 item { Spacer(Modifier.height(8.dp)) }
                 items(res, key = { "s" + it.id }) { StationRow(it) }
             } else {
-                homeSections(home, failed, here, onRetry = { reload++ }, onBrowse = { browse = it })
+                homeSections(home, failed, here, onRetry = { reload++ }, onBrowse = { browse = it }, onGlobe = { globe = true })
             }
         }
     }
 }
 
 private fun LazyListScope.homeSections(
-    h: Home?, failed: Boolean, here: String, onRetry: () -> Unit, onBrowse: (Browse) -> Unit,
+    h: Home?, failed: Boolean, here: String, onRetry: () -> Unit, onBrowse: (Browse) -> Unit, onGlobe: () -> Unit,
 ) {
     when {
         h == null && failed -> item {
@@ -188,6 +191,7 @@ private fun LazyListScope.homeSections(
                     items(h.featured, key = { it.id }) { FeatureCard(it) }
                 }
             }
+            item { GlobeCard(onGlobe) }
             if (RadioLibrary.favorites.isNotEmpty()) {
                 item { Label("Your stations") }
                 item { TileRow(RadioLibrary.favorites) }
@@ -353,7 +357,7 @@ private fun StationTile(s: Station) {
 }
 
 @Composable
-private fun StationRow(s: Station) {
+internal fun StationRow(s: Station) {
     val context = LocalContext.current
     val current = Radio.station?.id == s.id
     val fav = RadioLibrary.isFavorite(s)
@@ -438,6 +442,8 @@ fun RadioMini(onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(24.dp)
     val tint = remember(s.id) { stationColor(s.name) }
     val busy = Radio.playing || Radio.buffering
+    var found by remember { mutableStateOf<String?>(null) }
+    found?.let { OnAirSheet(it, s.name) { found = null } }
     Row(
         modifier.fillMaxWidth().pressable(onClick = onOpen).clip(shape)
             .background(lerp(Fidelis.bg1, tint, 0.35f).copy(alpha = 0.72f)).background(Fidelis.sheen)
@@ -458,6 +464,7 @@ fun RadioMini(onOpen: () -> Unit, modifier: Modifier = Modifier) {
         IconCircle(if (busy) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (busy) "Pause" else "Play",
             { Radio.toggle(context) }, size = 44.dp, filled = true)
         Spacer(Modifier.width(6.dp))
+        Radio.onAir?.let { song -> IconCircle(Icons.Rounded.Search, "Find on Spotify", { found = song }, size = 36.dp); Spacer(Modifier.width(6.dp)) }
         IconCircle(Icons.Rounded.Close, "Stop radio", { Radio.stop() }, size = 36.dp)
         Spacer(Modifier.width(4.dp))
     }
@@ -472,6 +479,8 @@ fun RadioSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val c = remember(s.id) { stationColor(s.name) }
     val busy = Radio.playing || Radio.buffering
+    var found by remember { mutableStateOf<String?>(null) }
+    found?.let { OnAirSheet(it, s.name) { found = null } }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -491,6 +500,10 @@ fun RadioSheet(onDismiss: () -> Unit) {
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold))
             Text(Radio.onAir ?: s.meta, color = Fidelis.inkMute, textAlign = TextAlign.Center, maxLines = 2,
                 style = MaterialTheme.typography.bodyMedium)
+            Radio.onAir?.let { song ->
+                Spacer(Modifier.height(14.dp))
+                SoftButton("Find on Spotify", { found = song }, icon = Icons.Rounded.Search)
+            }
             Spacer(Modifier.height(26.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                 val fav = RadioLibrary.isFavorite(s)

@@ -75,5 +75,10 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/share_paths" />
         </provider>
 
+        <!-- The home screen widget: what's playing, on its own colour, with controls. -->
+        <receiver android:name=".widget.HomeWidget" android:exported="false" android:label="Now playing">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_now_playing_info" />
+        </receiver>
     </application>
 </manifest>
