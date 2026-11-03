@@ -8,6 +8,9 @@ import androidx.media3.common.Metadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.source. DefaultMediaSourceFactory
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
@@ -26,6 +29,9 @@ class RadioService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         val player = ExoPlayer.Builder(this)
+            // Many streams redirect, some from https to plain http (Radio Garden does for older stations).
+            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this,
+                DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true).setUserAgent("Fidelis/1.4"))))
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true,
             )

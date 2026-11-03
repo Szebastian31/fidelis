@@ -66,7 +66,7 @@ object Radio {
     fun play(context: Context, s: Station) {
         station = s; onAir = null; buffering = true
         RadioLibrary.played(context, s)
-        scope.launch { RadioBrowser.click(s.id) }
+        if (!s.fromGarden) scope.launch { RadioBrowser.click(s.id) }
         val meta = MediaMetadata.Builder().setTitle(s.name).setArtist(s.meta.ifBlank { "Live radio" })
             .apply { s.favicon.takeIf { it.isNotBlank() }?.let { setArtworkUri(it.toUri()) } }.build()
         val item = MediaItem.Builder().setMediaId(s.id).setUri(s.stream.toUri()).setMediaMetadata(meta)

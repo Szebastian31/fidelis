@@ -3,10 +3,19 @@ package com.fidelis.player.ui.podcasts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import android.graphics.drawable.BitmapDrawable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.font.FontWeight
+import com.fidelis.player.ui.radio.stationColor
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,38 +41,93 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
-/** Your podcasts, like Spotify's: newest episodes first, then the shows you follow. */
+/** Your podcasts, laid out like the radio: big cards for what's new, where you left off, then your shows. */
 @Composable
 fun PodcastsScreen(onOpenShow: (String) -> Unit, onOpenPlayer: () -> Unit, toggle: @Composable () -> Unit = {}, vm: PodcastsViewModel = hiltViewModel()) {
     val connected by vm.connected.collectAsState()
     val snap by vm.nowPlaying.collectAsState()
+    val play: (PodcastEpisode) -> Unit = { vm.play(it); onOpenPlayer() }
     FidelisBackground {
-        LazyVerticalGrid(
-            GridCells.Fixed(3), Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = chromeBottom()),
-            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            item(span = { GridItemSpan(maxLineSpan) }) { ScreenHeader("Listen", eyebrow = "Podcasts") { toggle() } }
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = chromeBottom())) {
+            item { Box(Modifier.padding(horizontal = 20.dp)) { ScreenHeader("Listen", eyebrow = "Podcasts") { toggle() } } }
             when {
-                !connected -> item(span = { GridItemSpan(maxLineSpan) }) {
-                    EmptyState("Connect Spotify", "Sign in on the Listen tab and your podcasts appear here.")
+                !connected -> item {
+                    EmptyState("Connect Spotify", "Connect Spotify in Profile and your podcasts appear here.",
+                        Modifier.padding(horizontal = 20.dp))
                 }
-                vm.loading && vm.shows.isEmpty() -> items(6) { SkeletonBox(Modifier.fillMaxWidth().aspectRatio(1f)) }
-                vm.shows.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+                vm.loading && vm.shows.isEmpty() -> items(4) { i ->
+                    SkeletonBox(Modifier.padding(horizontal = 20.dp, vertical = 8.dp).fillMaxWidth().height(if (i == 0) 196.dp else 72.dp))
+                }
+                vm.shows.isEmpty() -> item {
                     EmptyState("No shows yet", "Follow a podcast in Spotify and it shows up here.",
-                        actionLabel = "Refresh", onAction = vm::refresh)
+                        Modifier.padding(horizontal = 20.dp), actionLabel = "Refresh", onAction = vm::refresh)
                 }
                 else -> {
-                    if (vm.latest.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel("New episodes") }
-                        items(vm.latest.take(8), key = { "e-" + it.uri }, span = { GridItemSpan(maxLineSpan) }) { e ->
-                            EpisodeRow(e, e.uri == snap?.uri) { vm.play(e); onOpenPlayer() }
+                    val fresh = vm.latest.filter { !it.finished }.take(8)
+                    val resume = vm.latest.filter { !it.finished && it.playedMs > 0 }.take(4)
+                    if (fresh.isNotEmpty()) item {
+                        LazyRow(Modifier.padding(top = 16.dp), contentPadding = PaddingValues(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            items(fresh, key = { "f" + it.uri }) { e -> EpisodeCard(e, e.uri == snap?.uri) { play(e) } }
                         }
                     }
-                    item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel("Your shows") }
-                    items(vm.shows, key = { it.id }) { s -> ShowTile(s) { onOpenShow(s.id) } }
+                    if (resume.isNotEmpty()) {
+                        item { Label("Continue listening") }
+                        items(resume, key = { "r" + it.uri }) { e ->
+                            Box(Modifier.padding(horizontal = 20.dp)) { EpisodeRow(e, e.uri == snap?.uri) { play(e) } }
+                        }
+                    }
+                    item { Label("Your shows") }
+                    item {
+                        LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            items(vm.shows, key = { it.id }) { s -> ShowTile(s) { onOpenShow(s.id) } }
+                        }
+                    }
+                    if (vm.latest.isNotEmpty()) {
+                        item { Label("New episodes") }
+                        items(vm.latest.take(12), key = { "e" + it.uri }) { e ->
+                            Box(Modifier.padding(horizontal = 20.dp)) { EpisodeRow(e, e.uri == snap?.uri) { play(e) } }
+                        }
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun Label(text: String) = SectionLabel(text, Modifier.padding(horizontal = 20.dp))
+
+/** A big card for a fresh episode, in its cover's own colour. */
+@Composable
+private fun EpisodeCard(e: PodcastEpisode, playing: Boolean, onClick: () -> Unit) {
+    var tint by remember(e.uri) { mutableStateOf<Color?>(null) }
+    val c = tint ?: stationColor(e.show)
+    val shape = RoundedCornerShape(26.dp)
+    val fresh = remember(e.released) {
+        runCatching { ChronoUnit.DAYS.between(LocalDate.parse(e.released), LocalDate.now()) < 7 }.getOrDefault(false)
+    }
+    val badge = if (playing) "PLAYING" else if (fresh) "NEW" else null
+    Box(
+        Modifier.width(290.dp).height(196.dp).pressable(onClick = onClick)
+            .shadow(18.dp, shape, ambientColor = c, spotColor = c).clip(shape)
+            .background(Brush.linearGradient(listOf(lerp(c, Color.White, 0.12f), lerp(c, Color.Black, 0.55f))))
+            .background(Fidelis.sheen).border(1.dp, Fidelis.border, shape).padding(18.dp),
+    ) {
+        AsyncImage(e.imageUrl, null, Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(Fidelis.glass),
+            contentScale = ContentScale.Crop,
+            onSuccess = { s -> tint = (s.result.drawable as? BitmapDrawable)?.bitmap?.let(::artTint) })
+        badge?.let {
+            Box(Modifier.align(Alignment.TopEnd).clip(CircleShape).background(Color.Black.copy(alpha = 0.28f))
+                .padding(horizontal = 10.dp, vertical = 5.dp)) {
+                Text(it, color = Fidelis.ink, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        Column(Modifier.align(Alignment.BottomStart)) {
+            Text(e.show, color = Fidelis.inkSoft, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(e.name, color = Fidelis.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold))
+            Text(episodeMeta(e), color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall, maxLines = 1)
         }
     }
 }
@@ -138,11 +202,12 @@ fun EpisodeRow(e: PodcastEpisode, playing: Boolean, showName: Boolean = true, on
 
 @Composable
 private fun ShowTile(s: PodcastShow, onClick: () -> Unit) {
-    Column(Modifier.pressable(onClick = onClick)) {
-        AsyncImage(s.imageUrl, s.name, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(16.dp))
-            .background(Fidelis.glass), contentScale = ContentScale.Crop)
-        Spacer(Modifier.height(6.dp))
-        Text(s.name, color = Fidelis.ink, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow. Ellipsis)
+    val shape = RoundedCornerShape(22.dp)
+    Column(Modifier.width(124.dp).pressable(onClick = onClick)) {
+        AsyncImage(s.imageUrl, s.name, Modifier.size(124.dp).shadow(10.dp, shape).clip(shape).background(Fidelis.glass),
+            contentScale = ContentScale.Crop)
+        Spacer(Modifier.height(8.dp))
+        Text(s.name, color = Fidelis.ink, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(s.publisher, color = Fidelis.inkMute, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

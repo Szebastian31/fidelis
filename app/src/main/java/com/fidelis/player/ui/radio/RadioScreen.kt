@@ -61,6 +61,7 @@ import com.fidelis.player.radio.Station
 import com.fidelis.player.radio.countryName
 import com.fidelis.player.radio.flagOf
 import com.fidelis.player.radio.homeCountry
+import com.fidelis.player.radio.searchEverywhere
 import com.fidelis.player.ui.podcasts. PodcastsScreen
 import com.fidelis.player.ui.theme.*
 import kotlinx.coroutines.async
@@ -92,6 +93,8 @@ private val GENRES = listOf(
     Genre("Talk", "talk", Color(0xFF60A5FA), Color(0xFF1E3A8A)),
     Genre("Oldies", "oldies", Color(0xFFD97706), Color(0xFF451A03)),
     Genre("Metal", "metal", Color(0xFF6B7280), Color(0xFF111827)),
+    Genre("J-Pop", "jpop", Color(0xFFFF7AB6), Color(0xFF3B1D6E)),
+    Genre("Lo-fi", "lofi", Color(0xFFA78BFA), Color(0xFF1F2A44)),
 )
 
 private sealed interface Browse {
@@ -126,11 +129,12 @@ private fun RadioHome(toggle: @Composable () -> Unit) {
         runCatching {
             coroutineScope {
                 val loved = async { RadioBrowser.loved(10) }
+                val picks = async { runCatching { RadioBrowser.picks() }.getOrDefault(emptyList()) }
                 val near = async { RadioBrowser.country(here, 40) }
                 val top = async { RadioBrowser.top(30) }
                 val countries = async { RadioBrowser.countries() }
                 val n = near.await()
-                Home((n.take(4) + loved.await()).distinctBy { it.id }.take(9), n, top.await(), countries.await())
+                Home(picks.await().ifEmpty { (n.take(4) + loved.await()).distinctBy { it.id }.take(9) }, n, top.await(), countries.await())
             }
         }.onSuccess { home = it; RadioCache.home = it }.onFailure { failed = true }
     }
@@ -139,7 +143,7 @@ private fun RadioHome(toggle: @Composable () -> Unit) {
     LaunchedEffect(query) {
         if (query.isBlank()) { results = null; return@LaunchedEffect }
         delay(400)
-        results = runCatching { RadioBrowser.search(query.trim()) }.getOrDefault(emptyList())
+        results = searchEverywhere(query.trim())
     }
     var browse by remember { mutableStateOf<Browse?>(null) }
     BackHandler(browse != null) { browse = null }
@@ -177,8 +181,9 @@ private fun LazyListScope.homeSections(
             SkeletonBox(Modifier.padding(horizontal = 20.dp, vertical = 8.dp).fillMaxWidth().height(if (i == 0) 176.dp else 64.dp))
         }
         else -> {
+            item { Label("Fidelis picks") }
             item {
-                LazyRow(Modifier.padding(top = 16.dp), contentPadding = PaddingValues(horizontal = 20.dp),
+                LazyRow(contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     items(h.featured, key = { it.id }) { FeatureCard(it) }
                 }
