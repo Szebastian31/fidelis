@@ -2,8 +2,8 @@ package com.fidelis.player.ui.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.fidelis.player.integration.lyrics.LrcLib
 import com.fidelis.player.integration.lyrics.Lyrics
+import com.fidelis.player.integration.lyrics.LyricsFinder
 import com.fidelis.player.integration.spotify.QueueTrack
 import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.SpotifyRepository
@@ -21,7 +21,7 @@ import javax.inject.Inject
 @HiltViewModel
 class NowPlayingViewModel @Inject constructor(
     private val remote: SpotifyRemote,
-    private val lrclib: LrcLib,
+    private val finder: LyricsFinder,
     private val repo: SpotifyRepository,
 ) : ViewModel() {
     val state = remote.state
@@ -36,14 +36,26 @@ class NowPlayingViewModel @Inject constructor(
     private val _lyrics = MutableStateFlow<Lyrics>(Lyrics.Loading)
     val lyrics: StateFlow<Lyrics> = _lyrics.asStateFlow()
 
+    private val _lyricOffset = MutableStateFlow(0L)
+    /** How much earlier (positive) or later the lyrics show for this song, in ms. */
+    val lyricOffset: StateFlow<Long> = _lyricOffset.asStateFlow()
+
+    private var options: List<Lyrics> = emptyList()
+    private var pick = 0
+    private var key = ""
+
     init {
         // Fetch lyrics whenever the song changes.
         viewModelScope.launch {
             remote.state.filterNotNull().filter { it.title.isNotBlank() }
                 .distinctUntilChangedBy { it.uri ?: "${it.artist}|${it.title}" }
                 .collectLatest { s ->
+                    key = finder.key(s.artist, s.title)
                     _lyrics.value = Lyrics.Loading
-                    _lyrics.value = lrclib.find(s.artist, s.title, s.durationMs)
+                    _lyricOffset.value = finder.offset(key)
+                    options = finder.find(s.artist, s.title, s.durationMs)
+                    pick = finder.preferred(key, options)
+                    _lyrics.value = options.getOrElse(pick) { Lyrics.None }
                 }
         }
     }
@@ -60,6 +72,21 @@ class NowPlayingViewModel @Inject constructor(
                 if (missing.isNotEmpty()) remote.fillArt(repo.trackArt(missing))
             }
         }
+    }
+
+    /** Shows the next source's lyrics, and remembers the choice for this song. */
+    fun nextLyrics() {
+        if (options.size < 2) return
+        pick = (pick + 1) % options.size
+        finder.prefer(key, options[pick])
+        _lyrics.value = options[pick]
+    }
+
+    /** Moves the lyrics earlier (positive) or later for this song, and remembers it. */
+    fun nudgeLyrics(by: Long) {
+        val v = (_lyricOffset.value + by).coerceIn(-10_000L, 10_000L)
+        _lyricOffset.value = v
+        finder.setOffset(key, v)
     }
 
     fun togglePlay() { if (state.value?.isPaused == true) remote.resume() else remote.pause() }

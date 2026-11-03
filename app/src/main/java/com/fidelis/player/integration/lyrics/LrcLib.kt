@@ -1,89 +1,121 @@
 package com.fidelis.player.integration.lyrics
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
+import java.text.Normalizer
 import kotlin.math.abs
 
-data class LyricLine(val timeMs: Long, val text: String)
+/** One word of a word-by-word line, with when it starts and ends. */
+data class LyricWord(val startMs: Long, val endMs: Long, val text: String)
+data class LyricLine(val timeMs: Long, val text: String, val words: List<LyricWord> = emptyList())
 
 sealed interface Lyrics {
     data object Loading : Lyrics
     data object None : Lyrics
     data object Instrumental : Lyrics
-    data class Synced(val lines: List<LyricLine>) : Lyrics
-    data class Plain(val lines: List<String>) : Lyrics
+    /** source is where these came from; choices is how many sources had the song. */
+    data class Synced(val lines: List<LyricLine>, val source: String = "", val choices: Int = 1) : Lyrics
+    data class Plain(val lines: List<String>, val source: String = "", val choices: Int = 1) : Lyrics
 }
 
-/** Lyrics from LRCLIB (lrclib.net): free, no key. Timed lines when available, plain text otherwise. */
-@Singleton
-class LrcLib @Inject constructor() {
-    private val http = OkHttpClient.Builder().callTimeout(10, TimeUnit.SECONDS).build()
-    private val cache = object : LinkedHashMap<String, Lyrics>(32, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap. MutableEntry<String, Lyrics>?) = size > 40
+/** What one source found. diffMs is how far its length is from the song playing, when known. */
+internal data class Found(
+    val source: String, val rank: Int, val lines: List<LyricLine>, val plain: List<String>,
+    val diffMs: Long?, val instrumental: Boolean = false,
+) {
+    val words get() = lines.any { it.words.isNotEmpty() }
+}
+
+/** The song being looked up, cleaned for matching. */
+internal class Wanted(artist: String, title: String, val durationMs: Long) {
+    val clean = cleanTitle(title)
+    val mainArtist = artist.split(SPLIT).first().trim().ifBlank { artist }
+    private val artists = artist.split(SPLIT).map(::norm).filter { it.isNotEmpty() }
+    private val t = norm(clean)
+
+    fun titleMatches(got: String): Boolean {
+        val g = norm(cleanTitle(got))
+        return t.isNotEmpty() && g.isNotEmpty() && (t == g || t.contains(g) || g.contains(t))
     }
 
-    suspend fun find(artist: String, title: String, durationMs: Long): Lyrics = withContext(Dispatchers.IO) {
-        val key = "${artist.lowercase()}|${title.lowercase()}"
-        synchronized(cache) { cache[key] }?.let { return@withContext it }
-        // A network failure isn't cached, so the next open tries again.
-        val found = runCatching { search(artist, cleanTitle(title), durationMs) }.getOrElse { return@withContext Lyrics.None }
-        synchronized(cache) { cache[key] = found }
-        found
+    fun artistMatches(got: String): Boolean {
+        val g = norm(got)
+        return g.isNotEmpty() && artists.any { g.contains(it) || it.contains(g) }
     }
 
-    private fun search(artist: String, title: String, durationMs: Long): Lyrics {
-        val url = "https://lrclib.net/api/search?track_name=${enc(title)}&artist_name=${enc(artist)}"
-        val req = Request.Builder().url(url).header("User-Agent", "Fidelis (github.com/Szebastian31/fidelis)").build()
-        val body = http.newCall(req).execute().use { r ->
-            if (!r.isSuccessful) error("lrclib")
-            r.body?.string().orEmpty()
-        }
-        val arr = JSONArray(body)
-        val items = (0 until arr.length()).map { arr.getJSONObject(it) }
-        if (items.isEmpty()) return Lyrics.None
-        val secs = durationMs / 1000.0
-        // Prefer timed lyrics, then the version whose length is closest to what's playing.
-        val best = items.sortedWith(
-            compareBy<JSONObject>({ it.str("syncedLyrics").isBlank() }, { abs(it.optDouble("duration", 0.0) - secs) })
-        ).first()
-        if (best.optBoolean("instrumental", false)) return Lyrics.Instrumental
-        val synced = parseLrc(best.str("syncedLyrics"))
-        if (synced.isNotEmpty()) return Lyrics.Synced(synced)
-        val plain = best.str("plainLyrics").lines().map { it.trim() }
-        return if (plain.any { it.isNotEmpty() }) Lyrics.Plain(plain) else Lyrics.None
+    fun diff(ms: Long): Long? = if (durationMs > 0 && ms > 0) abs(ms - durationMs) else null
+
+    /** The same song: title and artist match, or the artist matches and the length is within a second (a title in another script). */
+    fun accepts(title: String, artist: String, ms: Long): Boolean {
+        if (!artistMatches(artist)) return false
+        val d = diff(ms)
+        return (titleMatches(title) && (d == null || d <= 20_000)) || (d != null && d <= 1_000)
     }
-
-    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
-
-    // org.json turns a JSON null into the text "null"; treat it as empty.
-    private fun JSONObject.str(k: String) = if (isNull(k)) "" else optString(k)
-
-    private fun cleanTitle(t: String): String = t.replace(
-        Regex("""\s*[-–(\[]\s*(\d{4}\s*)?(remaster(ed)?|radio edit|feat\.|ft\.|mono|stereo|single version).*$""",
-            RegexOption.IGNORE_CASE), "",
-    ).ifBlank { t }
 
     private companion object {
-        val TAG = Regex("""\[(\d{1,3}):(\d{2}(?:[.:]\d{1,3})?)]""")
+        val SPLIT = Regex("""\s*(,|&|;|/|\bfeat\.|\bft\.|\bx\b)\s*""", RegexOption.IGNORE_CASE)
+    }
+}
 
-        /** "[01:02.50] line" → LyricLine(62500, "line"). A line may carry several time tags. */
-        fun parseLrc(s: String): List<LyricLine> = s.lines().flatMap { line ->
-            val tags = TAG.findAll(line).toList()
-            if (tags.isEmpty()) return@flatMap emptyList()
-            val text = line.substring(tags.last().range.last + 1).trim()
-            tags.map { m ->
-                val min = m.groupValues[1].toLong()
-                val sec = m.groupValues[2].replace(':', '.').toDouble()
-                LyricLine(min * 60_000 + (sec * 1000).toLong(), text)
-            }
-        }.sortedBy { it.timeMs }
+/** Lower case letters and digits only, accents removed, so names compare across sources. */
+internal fun norm(s: String): String =
+    Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").filter { it.isLetterOrDigit() }
+
+internal fun cleanTitle(t: String): String = t.replace(
+    Regex("""\s*[-–(\[]\s*(\d{4}\s*)?(remaster(ed)?|radio edit|feat\.|ft\.|with |mono|stereo|single version|live|acoustic|explicit|from ).*$""",
+        RegexOption.IGNORE_CASE), "",
+).ifBlank { t }
+
+internal fun enc(s: String): String = URLEncoder.encode(s, "UTF-8")
+
+// org.json turns a JSON null into the text "null"; treat it as empty.
+internal fun JSONObject.str(k: String) = if (isNull(k)) "" else optString(k)
+
+/** Song credits some sources put first, such as "作词 : …" or "Produced by …". */
+internal val CREDIT = Regex(
+    """^\s*(作词|作詞|作曲|编曲|編曲|制作人|制作|混音|母带|和声|录音|监制|出品|发行|词|曲|Lyrics?\s*by|Written\s*by|Composed\s*by|Produced\s*by|Arranged\s*by|Mixed\s*by)\s*[:：]""",
+    RegexOption.IGNORE_CASE,
+)
+
+private val TAG = Regex("""\[(\d{1,3}):(\d{1,2}(?:[.:]\d{1,3})?)]""")
+private val OFFSET = Regex("""\[offset:\s*([+-]?\d+)\s*]""", RegexOption.IGNORE_CASE)
+private val WORD_TAG = Regex("""<\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?>""")
+
+/** "[01:02.50] line" → LyricLine(62500, "line"). A line may carry several time tags; [offset:] is applied. */
+internal fun parseLrc(s: String): List<LyricLine> {
+    if (s.isBlank()) return emptyList()
+    val off = OFFSET.find(s)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+    val out = s.lines().flatMap { line ->
+        val tags = TAG.findAll(line).toList()
+        if (tags.isEmpty()) return@flatMap emptyList<LyricLine>()
+        val text = line.substring(tags.last().range.last + 1).replace(WORD_TAG, "").trim()
+        tags.map { m ->
+            val ms = m.groupValues[1].toLong() * 60_000 + (m.groupValues[2].replace(':', '.').toDouble() * 1000).toLong()
+            LyricLine((ms - off).coerceAtLeast(0), text)
+        }
+    }.filterNot { CREDIT.containsMatchIn(it.text) }.sortedBy { it.timeMs }
+    // Every line on the same time means the file has no real timing.
+    return if (out.size > 2 && out.all { it.timeMs == out.first().timeMs }) emptyList() else out
+}
+
+/** Lyrics from LRCLIB (lrclib.net): free, no key. Searched by title and artist, then by both as one query. */
+internal class LrcLib(private val http: OkHttpClient) {
+    fun find(w: Wanted): List<Found>? {
+        val bodies = listOf(
+            "https://lrclib.net/api/search?track_name=${enc(w.clean)}&artist_name=${enc(w.mainArtist)}",
+            "https://lrclib.net/api/search?q=${enc(w.mainArtist + " " + w.clean)}",
+        ).map { http.text(it, "User-Agent" to "Fidelis (github.com/Szebastian31/fidelis)") }
+        if (bodies.all { it == null }) return null
+        val items = bodies.filterNotNull().flatMap { b ->
+            runCatching { JSONArray(b).let { a -> (0 until a.length()).map { a.getJSONObject(it) } } }.getOrDefault(emptyList())
+        }.distinctBy { it.optLong("id") }
+        return items.mapNotNull { o ->
+            val ms = (o.optDouble("duration", 0.0) * 1000).toLong()
+            if (!w.accepts(o.str("trackName"), o.str("artistName"), ms)) return@mapNotNull null
+            Found("LRCLIB", 0, parseLrc(o.str("syncedLyrics")), o.str("plainLyrics").lines().map { it.trim() },
+                w.diff(ms), o.optBoolean("instrumental", false))
+        }
     }
 }

@@ -18,7 +18,7 @@ https://buycoffee.to/szebastian
 
 - **Listen.** Your library at a glance: **Quick picks** (your most played of the last 4 weeks), **Listen again** (recently played), **Heavy rotation** (your top artists of the last 6 months), then Liked Songs and your playlists.
 - **A player made for the cover.** The artwork fills the screen and glows softly under the controls in its own colour. Tap it to see the whole cover (it grows back after 5 seconds), swipe it left or right for the next or previous song, and swipe down to close.
-- **Synced lyrics.** The current line glows and follows the song; tap any line to jump there. Lyrics come from LRCLIB, with plain lyrics when timed ones aren't available.
+- **Synced lyrics.** The current line glows and follows the song; tap any line to jump there. Lyrics come from LRCLIB, NetEase Cloud Music and Kugou, matched to the exact recording, often word by word. Nudge the timing or switch source at the bottom of the lyrics.
 - **A queue that's yours.** Play next, add to queue, drag songs into a new order, shuffle or clear Up next. **Previous** goes back through the last 10 songs you played, instead of just restarting the current one.
 - **Add to playlist.** Tap **+** next to ❤ in the player, or ⋮ › **Add to playlist** on any song: Up next, albums, artists, playlists, search and mixes. It lists the playlists you made or collaborate on.
 - **Share, Spotify style.** A card in the cover's colour, then the apps you have (Instagram Stories, WhatsApp, Telegram, Messenger…), Copy link and More. Stories get a ready-made story image; chats get an open.spotify.com link.
@@ -62,7 +62,7 @@ Spotify limits what apps like Fidelis can see. Fidelis can only list the songs o
 
 ## Privacy
 
-There's no Fidelis server and no analytics. Your Spotify and Last.fm sign-ins are stored encrypted on your phone. Fidelis talks only to Spotify (your library and playback), Last.fm (song and artist names, for tags, similar songs, popularity and scrobbles) and LRCLIB (the title and artist of the song you open lyrics for). Saved mixes and the tag cache stay on your phone.
+There's no Fidelis server and no analytics. Your Spotify and Last.fm sign-ins are stored encrypted on your phone. Fidelis talks only to Spotify (your library and playback), Last.fm (song and artist names, for tags, similar songs, popularity and scrobbles) and LRCLIB, NetEase Cloud Music and Kugou (the title, artist and length of the song you open lyrics for). Saved mixes and the tag cache stay on your phone.
 
 ---
 
@@ -77,7 +77,7 @@ A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines
 | --- | --- |
 | `integration/spotify/` | `SpotifyRepository` (Web API, sign-in, token refresh), `SpotifyRemote` (App Remote bridge, plus Fidelis's own Up next and 10-song history), `SpotifyCatalog` (search, artists, albums), `ArtistRadio`, `HomeFeed` |
 | `integration/lastfm/` | Tags, similar songs and top tracks (`LastfmApiImpl`, `LastfmTop`), sign-in, and scrobbling (`BridgeScrobbler`) |
-| `integration/lyrics/` | `LrcLib`: synced and plain lyrics |
+| `integration/lyrics/` | `LyricsFinder`: synced, word-by-word and plain lyrics from LRCLIB, NetEase and Kugou |
 | `mood/` | `MoodRepository` (mood scoring, flow ordering, discoveries), `TagCache`, `MixStore`, and the Mood screens |
 | `playback/` | `PlaybackService`: media session and notification for the lock screen and Fluid Cloud |
 | `ui/` | Screens; `ui/theme/` holds the looks, the Manrope type and shared components |
@@ -109,3 +109,9 @@ A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines
 
 - **Podcast search works again.** Spotify stopped accepting the request for shows in your account's country, so Fidelis now passes your country directly. When Spotify finds nothing, Apple Podcasts' search fills in.
 - **Better podcast picks.** "Because you listen to", "About the artists you play", "Your vibe" and charts for your country and the world, from Apple Podcasts' public charts and search. Tap any of them to open it on Spotify.
+
+## New in 1.7.0
+
+- **More accurate lyrics.** LRCLIB, NetEase Cloud Music and Kugou are asked at once, and only versions whose title, artist and length fit the recording playing are kept. Timing that fits no source is dropped in favour of plain words.
+- **Word by word.** When NetEase has word timing, each word lights up as it's sung.
+- **Timing nudge and source switch.** Move lyrics earlier or later by a quarter second, or tap the source to try another. Both are remembered per song.
