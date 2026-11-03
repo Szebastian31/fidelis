@@ -123,6 +123,9 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
     // One colour from the cover washes the whole player; the look's accent if the cover is grey.
     val wash by animateColorAsState(rememberArtTint(art) ?: Fidelis.purple, tween(700), label = "wash")
     val base = lerp(Color.Black, wash, 0.26f)
+    // The queue gets the same living light as the rest of the app, in the cover's colour.
+    val skyTime = rememberSkyTime()
+    val alive by animateFloatAsState(if (snap?.isPaused == false) 1f else 0f, tween(1800), label = "alive")
 
     val duration = snap?.durationMs ?: 0L
     var position by remember(snap) { mutableLongStateOf(snap?.livePosition() ?: 0L) }
@@ -185,7 +188,11 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                     shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
                 }
                 .nestedScroll(sheet)
-                .background(base),
+                .background(base)
+                .drawBehind {
+                    val reveal = if (list.firstVisibleItemIndex > 0) 1f else (list.firstVisibleItemScrollOffset / size.height).coerceIn(0f, 1f)
+                    drawLivingGlow(skyTime.value, wash, alive, reveal)
+                },
         ) {
             LazyColumn(Modifier.fillMaxSize(), state = list) {
                 item {

@@ -27,6 +27,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.State
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui. Modifier
 import androidx.compose.ui.composed
@@ -101,22 +103,24 @@ object Ambience {
     }
 }
 
+/** A slow clock for living motion. About 30 steps a second is plenty, and easy on the battery. */
+@Composable
+fun rememberSkyTime(): State<Float> = produceState(0f) {
+    val start = withFrameMillis { it }
+    while (true) { delay(33); value = (withFrameMillis { it } - start) / 1000f }
+}
+
 /**
- * The family sky, alive: three soft glows that drift and breathe while music plays, a wash of the
+ * The family sky, alive: soft glows that drift and breathe while music plays, a wash of the
  * cover's colour and a little star dust. Screens settle in with a short lift.
  */
 @Composable
 fun FidelisBackground(content: @Composable () -> Unit) {
-    // A slow clock. About 30 steps a second is plenty for motion this gentle, and easy on the battery.
-    var time by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(Unit) {
-        val start = withFrameMillis { it }
-        while (true) { delay(33); time = (withFrameMillis { it } - start) / 1000f }
-    }
+    val time = rememberSkyTime()
     val live by animateFloatAsState(if (Ambience.playing) 1f else 0f, tween(1800), label = "live")
     val settle = remember { Animatable(0f) }
     LaunchedEffect(Unit) { settle.animateTo(1f, tween(560, easing = FastOutSlowInEasing)) }
-    Box(Modifier.fillMaxSize().drawBehind { drawSky(time, live) }) {
+    Box(Modifier.fillMaxSize().drawBehind { drawSky(time.value, live) }) {
         Box(Modifier.fillMaxSize().graphicsLayer {
             val s = settle.value
             alpha = 0.35f + 0.65f * s
@@ -128,29 +132,55 @@ fun FidelisBackground(content: @Composable () -> Unit) {
 /** Fixed spots for the star dust: x, y and a twinkle phase each. */
 private val Dust = Random(31).let { r -> FloatArray(26 * 3) { r.nextFloat() } }
 
+private fun Color.glowBoost(f: Float) = copy(alpha = (alpha * f).coerceAtMost(1f))
+
+private fun DrawScope.skyGlow(c: Color, x: Float, y: Float, r: Float) =
+    drawRect(Brush.radialGradient(listOf(c, Color.Transparent), center = Offset(x, y), radius = r))
+
 private fun DrawScope.drawSky(time: Float, live: Float) {
     val w = size.width; val h = size.height
     val mood = Fidelis.moodColor
     val amt = Fidelis.moodAmount * Fidelis.wash
-    val motion = 0.35f + 0.65f * live
-    val a = time * 0.12f
-    val breathe = 1f + 0.1f * live * sin(time * 0.9f)
+    // Paused, the sky keeps a calm drift; playing, it moves and breathes fully.
+    val motion = 0.45f + 0.55f * live
+    val a = time * 0.2f
+    val breathe = 1f + 0.22f * live * sin(time * 0.85f)
     drawRect(Brush.verticalGradient(0f to Fidelis.bg0, 0.6f to Fidelis.bg2, 1f to Fidelis.bg3))
-    fun glow(c: Color, x: Float, y: Float, r: Float) =
-        drawRect(Brush.radialGradient(listOf(c, Color.Transparent), center = Offset(x, y), radius = r))
-    glow(lerp(Fidelis.glow1, mood.copy(alpha = 0.46f), amt),
-        w * (0.16f + 0.07f * motion * sin(a)), h * (0.07f + 0.03f * motion * cos(a * 0.8f)), w * 0.95f * breathe)
-    glow(lerp(Fidelis.glow2, mood.copy(alpha = 0.30f), amt * 0.75f),
-        w * (0.88f + 0.06f * motion * cos(a * 0.7f)), h * (0.32f + 0.05f * motion * sin(a * 0.6f)), w * 0.8f * (2f - breathe))
-    glow(Fidelis.glow3, w * (0.42f + 0.1f * motion * sin(a * 0.5f)), h * 1.04f, w)
-    if (amt > 0.01f) drawRect(Brush.verticalGradient(0f to mood.copy(alpha = 0.2f * amt), 0.5f to Color.Transparent))
-    val dot = 1.1.dp.toPx()
+    skyGlow(lerp(Fidelis.glow1.glowBoost(1.5f), mood.copy(alpha = 0.62f), amt),
+        w * (0.2f + 0.18f * motion * sin(a)), h * (0.1f + 0.07f * motion * cos(a * 0.8f)), w * 1.05f * breathe)
+    skyGlow(lerp(Fidelis.glow2.glowBoost(1.5f), mood.copy(alpha = 0.42f), amt * 0.85f),
+        w * (0.85f + 0.14f * motion * cos(a * 0.7f)), h * (0.4f + 0.12f * motion * sin(a * 0.6f)), w * 0.9f * (2f - breathe))
+    skyGlow(lerp(Fidelis.glow3.glowBoost(1.4f), mood.copy(alpha = 0.3f), amt * 0.6f),
+        w * (0.45f + 0.22f * motion * sin(a * 0.5f)), h * (1f - 0.05f * motion * cos(a * 0.4f)), w * 1.1f)
+    // A fourth pool wanders the middle of the screen while music plays.
+    if (live > 0.01f) skyGlow(lerp(Fidelis.glow1, mood, amt).copy(alpha = 0.26f * live),
+        w * (0.5f + 0.35f * sin(a * 0.33f)), h * (0.6f + 0.18f * cos(a * 0.45f)), w * 0.75f * breathe)
+    if (amt > 0.01f) drawRect(Brush.verticalGradient(0f to mood.copy(alpha = 0.3f * amt), 0.55f to Color.Transparent))
+    val dot = 1.2.dp.toPx()
     for (i in 0 until Dust.size / 3) {
         val p = Dust[i * 3 + 2]
-        val twinkle = 0.5f + 0.5f * sin(time * (0.6f + p) + p * 6.283f)
-        drawCircle(Color.White.copy(alpha = 0.06f + 0.22f * twinkle), radius = dot * (0.7f + p * 0.6f),
+        val twinkle = 0.5f + 0.5f * sin(time * (0.8f + p) + p * 6.283f)
+        drawCircle(Color.White.copy(alpha = 0.08f + 0.3f * twinkle), radius = dot * (0.7f + p * 0.7f),
             center = Offset(Dust[i * 3] * w, Dust[i * 3 + 1] * h * 0.55f))
     }
+}
+
+/**
+ * The player's living light for the queue: pools of the cover's colour that drift and breathe like
+ * the sky. [reveal] fades it in as the queue scrolls into view.
+ */
+fun DrawScope.drawLivingGlow(time: Float, tint: Color, live: Float, reveal: Float) {
+    if (reveal <= 0.01f) return
+    val w = size.width; val h = size.height
+    val motion = 0.45f + 0.55f * live
+    val a = time * 0.2f
+    val breathe = 1f + 0.22f * live * sin(time * 0.85f)
+    skyGlow(tint.copy(alpha = 0.55f * reveal),
+        w * (0.15f + 0.2f * motion * sin(a)), h * (0.18f + 0.1f * motion * cos(a * 0.7f)), w * breathe)
+    skyGlow(lerp(tint, Color.White, 0.25f).copy(alpha = 0.32f * reveal),
+        w * (0.9f + 0.12f * motion * cos(a * 0.6f)), h * (0.55f + 0.14f * motion * sin(a * 0.5f)), w * 0.85f * (2f - breathe))
+    skyGlow(tint.copy(alpha = 0.4f * reveal),
+        w * (0.4f + 0.25f * motion * sin(a * 0.4f)), h * 1.02f, w * 1.1f)
 }
 
 /** A colour taken from the album art, made rich enough to tint surfaces. Null for grey covers. */

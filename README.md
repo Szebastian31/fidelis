@@ -31,7 +31,7 @@ https://buycoffee.to/szebastian
 - **Discoveries.** Mixes that blend your favourites with new songs like them (about two of yours for every new one), each marked **NEW**.
 - **Scrobbling to Last.fm.** Everything you play through Fidelis is scrobbled, following Last.fm's rules.
 - **Lock screen and Fluid Cloud.** Play, pause, skip and ❤ from the lock screen, the notification shade and the Fluid Cloud capsule on Oppo phones. ❤ saves the song to your Spotify Liked Songs.
-- **Five looks.** Night, Dawn, Aurora, Ocean and Midnight (pure black, for OLED screens).
+- **Five looks.** Night, Ember, Graphite, Ocean and Midnight (pure black, for OLED screens).
 
 ## Screens
 
