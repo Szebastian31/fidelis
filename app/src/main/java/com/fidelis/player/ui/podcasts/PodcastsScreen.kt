@@ -50,7 +50,9 @@ fun PodcastsScreen(onOpenShow: (String) -> Unit, onOpenPlayer: () -> Unit, toggl
     FidelisBackground {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = chromeBottom())) {
             item { Box(Modifier.padding(horizontal = 20.dp)) { ScreenHeader("Listen", eyebrow = "Podcasts") { toggle() } } }
+            if (connected) item { PodcastSearchField(vm.query, vm::search) }
             when {
+                connected && vm.query.isNotBlank() -> podcastResults(vm.results, vm.shows.map { it.id }.toSet(), onOpenShow)
                 !connected -> item {
                     EmptyState("Connect Spotify", "Connect Spotify in Profile and your podcasts appear here.",
                         Modifier.padding(horizontal = 20.dp))
@@ -83,6 +85,7 @@ fun PodcastsScreen(onOpenShow: (String) -> Unit, onOpenPlayer: () -> Unit, toggl
                             items(vm.shows, key = { it.id }) { s -> ShowTile(s) { onOpenShow(s.id) } }
                         }
                     }
+                    podcastPicks(vm.vibe, vm.rows, vm::search, onOpenShow)
                     if (vm.latest.isNotEmpty()) {
                         item { Label("New episodes") }
                         items(vm.latest.take(12), key = { "e" + it.uri }) { e ->
@@ -201,7 +204,7 @@ fun EpisodeRow(e: PodcastEpisode, playing: Boolean, showName: Boolean = true, on
 }
 
 @Composable
-private fun ShowTile(s: PodcastShow, onClick: () -> Unit) {
+internal fun ShowTile(s: PodcastShow, onClick: () -> Unit) {
     val shape = RoundedCornerShape(22.dp)
     Column(Modifier.width(124.dp).pressable(onClick = onClick)) {
         AsyncImage(s.imageUrl, s.name, Modifier.size(124.dp).shadow(10.dp, shape).clip(shape).background(Fidelis.glass),

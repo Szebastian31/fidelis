@@ -98,3 +98,8 @@ A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines
 - **Save the song on air.** When a station shows what's playing, tap the search button to find it on Spotify, then like it, add it to a playlist or play it.
 - **Home screen widget.** The song or station on now, on its own colour from the cover, with play, pause and skip.
 - **Radio globe.** A spinning Earth with a dot for every place that has radio, like Radio Garden. Drag, pinch, tap a dot to tune in, or shuffle to land somewhere new.
+
+## New in 1.6.0
+
+- **Search any podcast.** A search field on Podcasts finds any show on Spotify, by name, host or topic.
+- **Podcasts for you.** "Because you listen to", "From the people behind" and "More in your vibe" rows, plus genre chips with your own genres first. Genres come from Apple Podcasts' public search and are kept on the phone.
