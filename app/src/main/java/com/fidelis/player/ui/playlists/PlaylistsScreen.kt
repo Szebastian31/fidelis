@@ -59,6 +59,7 @@ import coil.compose.AsyncImage
 import com.fidelis.player.integration.spotify.PlaylistTrack
 import com.fidelis.player.integration.spotify.SpotifyHome
 import com.fidelis.player.integration.spotify.SpotifyPlaylist
+import com.fidelis.player.integration.spotify.coverUrl
 import com.fidelis.player.ui.theme.*
 import com.spotify.protocol.types.ListItem
 
@@ -78,7 +79,9 @@ fun PlaylistsScreen(
     val context = LocalContext.current
     val home = vm.home
     val pinned by vm.pinned.collectAsState()
-    val mine = remember(vm.playlists, pinned) { vm.ordered(pinned) }
+    val pins by vm.pinItems.collectAsState()
+    val mine = remember(vm.playlists, pins) { vm.shelf(pins) }
+    var itemSheet by remember { mutableStateOf<ListItem?>(null) }
     // "Your playlists" shows just your library; back returns to For you.
     var libraryOnly by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = libraryOnly) { libraryOnly = false }
@@ -97,6 +100,12 @@ fun PlaylistsScreen(
             else -> onOpenSpotify(item)
         }
     }
+    val tile: @Composable (Shelf) -> Unit = { s ->
+        when (s) {
+            is Shelf. Mine -> PlaylistTile(s.p, s.p.id in pinned, { onOpenPlaylist(s.p.id) }, { sheetFor = s.p })
+            is Shelf.Other -> PinnedTile(s.pin, vm.spotifyHome, { open(s.pin.toItem()) }, { itemSheet = s.pin.toItem() })
+        }
+    }
     LaunchedEffect(connected) { if (connected) vm.refresh() }
 
     FidelisBackground {
@@ -108,6 +117,18 @@ fun PlaylistsScreen(
                     SheetAction("Open playlist", Icons.AutoMirrored.Rounded.QueueMusic) { onOpenPlaylist(p.id) },
                 ),
                 onDismiss = { sheetFor = null },
+            )
+        }
+        itemSheet?.let { item ->
+            val on = pins.any { it.uri == item.uri }
+            TrackSheet(
+                title = item.title.orEmpty(), subtitle = "", imageUrl = item.coverUrl(),
+                actions = listOf(
+                    SheetAction(if (on) "Unpin" else "Pin to Your playlists", Icons.Rounded.PushPin) { vm.togglePin(item) },
+                    SheetAction("Play", Icons.Rounded.PlayArrow) { play(item) },
+                    SheetAction("Open", Icons.AutoMirrored.Rounded.QueueMusic) { open(item) },
+                ),
+                onDismiss = { itemSheet = null },
             )
         }
         LazyVerticalGrid(
@@ -142,9 +163,9 @@ fun PlaylistsScreen(
         }
         if (libraryOnly) {
             item(key = LIKED_PLAYLIST_ID) { LikedTile(vm.likedCount) { onOpenPlaylist(LIKED_PLAYLIST_ID) } }
-            items(mine, key = { it.id }) { p -> PlaylistTile(p, p.id in pinned, { onOpenPlaylist(p.id) }, { sheetFor = p }) }
+            items(mine, key = { it.key }) { s -> tile(s) }
             item(span = full, key = "hint") {
-                Text("Hold a playlist to pin it to the top.", color = Fidelis.inkFaint,
+                Text("Hold any playlist or mix, yours or Spotify's, to pin it here.", color = Fidelis.inkFaint,
                     style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
             }
             return@LazyVerticalGrid
@@ -152,12 +173,12 @@ fun PlaylistsScreen(
         if (mine.isNotEmpty()) {
             item(span = full, key = "mine") {
                 Column {
-                    RowTitle("Your playlists", if (pinned.isEmpty()) "Hold one to pin it here" else "Pinned first")
+                    RowTitle("Your playlists", if (pins.isEmpty()) "Hold any playlist or mix to pin it here" else "Pinned first")
                     LazyRow(Modifier.bleed(EDGE), contentPadding = PaddingValues(horizontal = EDGE),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         item(key = "m-liked") { Box(Modifier.width(112.dp)) { LikedTile(vm.likedCount) { onOpenPlaylist(LIKED_PLAYLIST_ID) } } }
-                        items(mine.take(20), key = { "m-${it.id}" }) { p ->
-                            Box(Modifier.width(112.dp)) { PlaylistTile(p, p.id in pinned, { onOpenPlaylist(p.id) }, { sheetFor = p }) }
+                        items(mine.take(20), key = { "m-${it.key}" }) { s ->
+                            Box(Modifier.width(112.dp)) { tile(s) }
                         }
                         item(key = "m-all") { SeeAllTile { libraryOnly = true } }
                     }
@@ -171,7 +192,7 @@ fun PlaylistsScreen(
                         horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         item(key = "dj") { DjCard { vm.playDj(); onOpenPlayer() } }
                         itemsIndexed(home?.made.orEmpty(), key = { i, _ -> "made-$i" }) { _, item ->
-                            SpotifyTile(item, vm.spotifyHome, 164.dp, onOpen = { open(item) }, onPlay = { play(item) })
+                            SpotifyTile(item, vm.spotifyHome, 164.dp, onOpen = { open(item) }, onPlay = { play(item) }, onHold = { itemSheet = item })
                         }
                     }
                 }
@@ -184,7 +205,7 @@ fun PlaylistsScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             recents.take(8).chunked(2).forEach { pair ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    pair.forEach { item -> RecentTile(item, vm.spotifyHome, Modifier.weight(1f)) { open(item) } }
+                                    pair.forEach { item -> RecentTile(item, vm.spotifyHome, Modifier.weight(1f), onHold = { itemSheet = item }) { open(item) } }
                                     if (pair.size == 1) Spacer(Modifier.weight(1f))
                                 }
                             }
@@ -209,7 +230,7 @@ fun PlaylistsScreen(
                         LazyRow(Modifier.bleed(EDGE), contentPadding = PaddingValues(horizontal = EDGE),
                             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             itemsIndexed(s.items, key = { i, _ -> "shelf-$si-$i" }) { _, item ->
-                                SpotifyTile(item, vm.spotifyHome, 148.dp, onOpen = { open(item) }, onPlay = { play(item) })
+                                SpotifyTile(item, vm.spotifyHome, 148.dp, onOpen = { open(item) }, onPlay = { play(item) }, onHold = { itemSheet = item })
                             }
                         }
                     }
@@ -260,7 +281,7 @@ fun PlaylistsScreen(
                         actionLabel = "Try again", onAction = { vm.refresh() },
                     )
                 }
-                else -> items(mine, key = { it.id }) { p -> PlaylistTile(p, p.id in pinned, { onOpenPlaylist(p.id) }, { sheetFor = p }) }
+                else -> items(mine, key = { it.key }) { s -> tile(s) }
             }
         }
     }
@@ -302,10 +323,10 @@ private fun PlayDot(modifier: Modifier, onClick: () -> Unit) {
 }
 
 @Composable
-private fun SpotifyTile(item: ListItem, home: SpotifyHome, size: Dp, onOpen: () -> Unit, onPlay: () -> Unit) {
+private fun SpotifyTile(item: ListItem, home: SpotifyHome, size: Dp, onOpen: () -> Unit, onPlay: () -> Unit, onHold: () -> Unit = {}) {
     val round = item.uri.orEmpty().startsWith("spotify:artist:")
     val shape = RoundedCornerShape(if (round) size / 2 else 18.dp)
-    Column(Modifier.width(size).pressable(onClick = onOpen)) {
+    Column(Modifier.width(size).holdable(onOpen, onHold)) {
         Box(Modifier.size(size).shadow(12.dp, shape).clip(shape)) {
             SpotifyArt(item, home, Modifier.fillMaxSize())
             PlayDot(Modifier.align(Alignment.BottomEnd).padding(8.dp), onPlay)
@@ -341,9 +362,9 @@ private fun DjCard(onClick: () -> Unit) {
 
 /** Spotify-style recent: small cover and name, two per row. */
 @Composable
-private fun RecentTile(item: ListItem, home: SpotifyHome, modifier: Modifier, onClick: () -> Unit) {
+private fun RecentTile(item: ListItem, home: SpotifyHome, modifier: Modifier, onHold: () -> Unit = {}, onClick: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)
-    Row(modifier.height(58.dp).clip(shape).background(Fidelis.glass).pressable(onClick = onClick),
+    Row(modifier.height(58.dp).clip(shape).background(Fidelis.glass).holdable(onClick, onHold),
         verticalAlignment = Alignment.CenterVertically) {
         SpotifyArt(item, home, Modifier.size(58.dp))
         Spacer(Modifier.width(10.dp))
@@ -448,4 +469,33 @@ private fun Modifier.holdable(onClick: () -> Unit, onHold: () -> Unit): Modifier
             interactionSource = source, indication = null, onClick = onClick,
             onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onHold() },
         )
+}
+
+/** A pinned playlist or mix from Spotify or other people: same tile as yours, cover from Spotify. */
+@Composable
+private fun PinnedTile(pin: Pin, home: SpotifyHome, onClick: () -> Unit, onHold: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    val item = remember(pin) { pin.toItem() }
+    Column(Modifier.holdable(onClick, onHold)) {
+        Box(
+            Modifier.fillMaxWidth().aspectRatio(1f).shadow(10.dp, shape).clip(shape).background(Fidelis.glass),
+            contentAlignment = Alignment.Center,
+        ) {
+            val img = pin.image
+            when {
+                img == null -> Icon(Icons. Rounded.MusicNote, null, tint = Fidelis.inkFaint, modifier = Modifier.size(28.dp))
+                img.startsWith("http") -> AsyncImage(img, pin.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else -> SpotifyArt(item, home, Modifier.fillMaxSize())
+            }
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(6.dp).size(24.dp).clip(CircleShape).background(Fidelis.accent),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.PushPin, "Pinned", tint = Fidelis.ink, modifier = Modifier.size(13.dp)) }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(pin.title, color = Fidelis.ink, style = MaterialTheme.typography.labelLarge,
+            maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (pin.subtitle.isNotBlank()) Text(pin.subtitle, color = Fidelis.inkMute, style = MaterialTheme.typography.labelSmall,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }

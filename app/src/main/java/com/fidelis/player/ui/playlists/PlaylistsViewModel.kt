@@ -88,6 +88,17 @@ class PlaylistsViewModel @Inject constructor(
 
     val pinned = pins.ids
     fun togglePin(id: String) = pins.toggle(id)
+    val pinItems = pins.items
+    fun togglePin(item: ListItem) = pins.toggle(item)
+    /** Your playlists with everything pinned first, in pin order: yours and Spotify's alike. */
+    fun shelf(all: List<Pin>): List<Shelf> {
+        val byId = playlists.associateBy { it.id }
+        val front = all.mapNotNull { pin ->
+            byId[pin.playlistId]?.let { Shelf.Mine(it) } ?: pin.takeIf { it.title.isNotBlank() }?.let { Shelf.Other(it) }
+        }
+        val taken = front.map { it.key }.toSet()
+        return front + playlists.filter { it.id !in taken }.map { Shelf.Mine(it) }
+    }
     /** Your playlists with pinned ones first, in pin order. */
     fun ordered(pinnedIds: List<String>) =
         playlists.sortedBy { p -> pinnedIds.indexOf(p.id).let { if (it < 0) Int.MAX_VALUE else it } }

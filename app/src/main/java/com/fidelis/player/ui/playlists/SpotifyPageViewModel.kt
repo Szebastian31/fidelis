@@ -28,6 +28,7 @@ class SpotifyPageViewModel @Inject constructor(
     private val remote: SpotifyRemote,
     private val repo: SpotifyRepository,
     private val home: SpotifyHome,
+    private val pins: PlaylistPins,
 ) : ViewModel() {
     val source: ListItem? = saved.get<String>("key")?.let(OpenedItems::get)
     val nowPlaying = remote.state
@@ -66,4 +67,6 @@ class SpotifyPageViewModel @Inject constructor(
     fun playNext(t: QueueTrack) = remote.playNext(listOf(t))
     fun addToQueue(t: QueueTrack) = remote.addToQueue(listOf(t))
     fun addAll() = remote.addToQueue(tracks)
+    val pinned = pins.items
+    fun togglePin() { source?.let { pins.toggle(it) } }
 }

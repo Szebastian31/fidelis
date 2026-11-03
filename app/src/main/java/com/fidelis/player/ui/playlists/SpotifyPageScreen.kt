@@ -11,6 +11,8 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.outlined.PushPin as PushPinOutline
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.Icon
@@ -33,6 +35,8 @@ fun SpotifyPageScreen(onBack: () -> Unit, onOpenPlayer: () -> Unit, vm: SpotifyP
     val snap by vm.nowPlaying.collectAsState()
     val src = vm.source
     val tracks = vm.tracks
+    val pinList by vm.pinned.collectAsState()
+    val isPinned = src != null && pinList.any { it.uri == src.uri }
     val cover = remember(src) { src?.coverUrl() } ?: tracks.firstOrNull()?.imageUrl
     var menuFor by remember { mutableStateOf<Pair<Int, QueueTrack>?>(null) }
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -64,6 +68,9 @@ fun SpotifyPageScreen(onBack: () -> Unit, onOpenPlayer: () -> Unit, vm: SpotifyP
                         onClick = { vm.shuffle(); onOpenPlayer() })
                     if (tracks.isNotEmpty()) IconCircle(Icons.AutoMirrored. Rounded.PlaylistAdd, "Add all to queue", size = 52.dp,
                         onClick = { vm.addAll(); toast("Added ${tracks.size} songs to queue") })
+                    if (src != null) IconCircle(if (isPinned) Icons.Rounded.PushPin else Icons.Outlined.PushPinOutline,
+                        if (isPinned) "Unpin" else "Pin to Your playlists", size = 52.dp,
+                        onClick = { vm.togglePin(); toast(if (isPinned) "Unpinned" else "Pinned to Your playlists") })
                 }
             }
             when {
