@@ -443,7 +443,7 @@ fun RadioMini(onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val tint = remember(s.id) { stationColor(s.name) }
     val busy = Radio.playing || Radio.buffering
     var found by remember { mutableStateOf<String?>(null) }
-    found?.let { OnAirSheet(it, s.name) { found = null } }
+    found?.let { OnAirSheet(it, s.name, onDismiss = { found = null }) }
     Row(
         modifier.fillMaxWidth().pressable(onClick = onOpen).clip(shape)
             .background(lerp(Fidelis.bg1, tint, 0.35f).copy(alpha = 0.72f)).background(Fidelis.sheen)
@@ -480,7 +480,7 @@ fun RadioSheet(onDismiss: () -> Unit) {
     val c = remember(s.id) { stationColor(s.name) }
     val busy = Radio.playing || Radio.buffering
     var found by remember { mutableStateOf<String?>(null) }
-    found?.let { OnAirSheet(it, s.name) { found = null } }
+    found?.let { OnAirSheet(it, s.name, onDismiss = { found = null }) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),

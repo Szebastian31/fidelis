@@ -124,7 +124,8 @@ private object GardenGlobe {
                 val page = item.optJSONObject("page") ?: item
                 val url = page.optString("url")
                 if ("/listen/" !in url) continue
-                val title = page.optString("title").ifBlank { continue }
+                val title = page.optString("title")
+                if (title.isBlank()) continue
                 out += RadioGarden.station(url.substringAfterLast('/'), title, "",
                     page.optJSONObject("country")?.optString("title").orEmpty().ifBlank { p.country },
                     page.optJSONObject("place")?.optString("title").orEmpty().ifBlank { p.title })
