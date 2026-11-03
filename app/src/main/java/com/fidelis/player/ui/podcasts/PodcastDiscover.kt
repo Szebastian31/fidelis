@@ -57,7 +57,7 @@ internal fun PodcastSearchField(query: String, onQuery: (String) -> Unit) {
             BasicTextField(
                 query, onQuery, Modifier.fillMaxWidth(), singleLine = true,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = Fidelis.ink),
-                cursorBrush = SolidColor(Fidelis.accent),
+                cursorBrush = Fidelis.accent,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
             )

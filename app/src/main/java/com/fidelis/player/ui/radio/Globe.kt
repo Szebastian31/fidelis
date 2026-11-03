@@ -2,7 +2,6 @@ package com.fidelis.player.ui.radio
 
 import android.content.Context
 import android.graphics.Paint as NativePaint
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
@@ -21,18 +20,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material3. MaterialTheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui. Modifier
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -46,24 +45,42 @@ import com.fidelis.player.radio.RadioGarden
 import com.fidelis.player.radio.Station
 import com.fidelis.player.ui.theme.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.acos
+import kotlin.math.asin
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
 private val DOT = Color(0xFF4DFFA8)
+private val LAND = Color(0x663A78B8)
+private val COAST = Color(0x8CA9D4FF)
 private val TAU = (2 * PI).toFloat()
 private val HALF = PI.toFloat()
 
+/** How far the circle in the middle reaches, in radians at normal zoom. About 500 km across. */
+private const val REACH = 0.04f
+
 /** One Radio Garden place: a town or city with stations. lat and lon in degrees. */
 private data class GlobePlace(val id: String, val title: String, val country: String, val lat: Float, val lon: Float, val size: Int)
+
+/** A place near the middle of the globe, and how far it is from it. */
+private data class Near(val place: GlobePlace, val km: Int)
+
+/** The places in the circle, or the nearest few when it's over open sea. */
+private data class Region(val near: List<Near>, val inside: Boolean)
 
 /** Every place as a point on a unit sphere, plus scratch buffers for drawing. */
 private class GlobeWorld(val places: List<GlobePlace>) {
@@ -80,6 +97,9 @@ private class GlobeWorld(val places: List<GlobePlace>) {
     }
 }
 
+/** The coastlines as rings of points on a unit sphere. starts holds where each ring begins, then the end. */
+private class GlobeLand(val x: FloatArray, val y: FloatArray, val z: FloatArray, val starts: IntArray)
+
 /**
  * Radio Garden's map of places and the stations in each. Like its search, it isn't an official
  * public API. The place list is large, so it's kept on the phone for a week.
@@ -87,12 +107,15 @@ private class GlobeWorld(val places: List<GlobePlace>) {
 private object GardenGlobe {
     private const val API = "https://radio.garden/api"
     private const val WEEK = 7L * 24 * 60 * 60 * 1000
+    private val cache = ConcurrentHashMap<String, List<Station>>()
     var world: GlobeWorld? = null; private set
+    var land: GlobeLand? = null; private set
     var lon = 0.35f
     var lat = 0.6f
+    var explored = false
 
     private fun fetch(url: String): String =
-        RadioBrowser.http.newCall(Request.Builder().url(url).header("User-Agent", "Fidelis/1.5").build()).execute().use {
+        RadioBrowser.http.newCall(Request.Builder().url(url).header("User-Agent", "Fidelis/1.6").build()).execute().use {
             if (!it.isSuccessful) error("Radio Garden answered ${it.code}")
             it.body?.string().orEmpty()
         }
@@ -113,7 +136,34 @@ private object GardenGlobe {
         GlobeWorld(places)
     }.also { world = it }
 
-    suspend fun stations(p: GlobePlace): List<Station> = withContext(Dispatchers.IO) {
+    /** The continents, from Natural Earth's public domain world map, bundled with the app. */
+    suspend fun land(context: Context): GlobeLand? = land ?: withContext(Dispatchers.IO) {
+        runCatching {
+            val text = context.assets.open("land.geojson").bufferedReader().use { it.readText() }
+            val fs = JSONObject(text).getJSONArray("features")
+            val xs = ArrayList<Float>(); val ys = ArrayList<Float>(); val zs = ArrayList<Float>()
+            val starts = ArrayList<Int>()
+            for (f in 0 until fs.length()) {
+                val g = fs.getJSONObject(f).optJSONObject("geometry") ?: continue
+                val c = g.optJSONArray("coordinates") ?: continue
+                val polys = if (g.optString("type") == "Polygon") listOf(c) else (0 until c.length()).map { c.getJSONArray(it) }
+                for (p in polys) for (r in 0 until p.length()) {
+                    val ring = p.getJSONArray(r)
+                    if (ring.length() < 3) continue
+                    starts += xs.size
+                    for (k in 0 until ring.length()) {
+                        val pt = ring.getJSONArray(k)
+                        val la = Math.toRadians(pt.getDouble(1)); val lo = Math.toRadians(pt.getDouble(0))
+                        xs += (cos(la) * sin(lo)).toFloat(); ys += sin(la).toFloat(); zs += (cos(la) * cos(lo)).toFloat()
+                    }
+                }
+            }
+            starts += xs.size
+            GlobeLand(xs.toFloatArray(), ys.toFloatArray(), zs.toFloatArray(), starts.toIntArray())
+        }.getOrNull()
+    }.also { land = it }
+
+    suspend fun stations(p: GlobePlace): List<Station> = cache[p.id] ?: withContext(Dispatchers.IO) {
         val data = JSONObject(fetch("$API/ara/content/page/${p.id}/channels")).optJSONObject("data") ?: return@withContext emptyList()
         val content = data.optJSONArray("content") ?: return@withContext emptyList()
         val out = mutableListOf<Station>()
@@ -131,8 +181,19 @@ private object GardenGlobe {
                     page.optJSONObject("place")?.optString("title").orEmpty().ifBlank { p.title })
             }
         }
-        out.distinctBy { it.id }
+        out.distinctBy { it.id }.also { cache[p.id] = it }
     }
+}
+
+/** The places around the middle of the globe, nearest first. */
+private fun nearby(w: GlobeWorld, la: Float, lo: Float, zoom: Float): Region {
+    val cx = cos(la) * sin(lo); val cy = sin(la); val cz = cos(la) * cos(lo)
+    val d = FloatArray(w.n) { w.x[it] * cx + w.y[it] * cy + w.z[it] * cz }
+    val order = (0 until w.n).sortedByDescending { d[it] }
+    val limit = cos(REACH * 3 / zoom)
+    val inside = order.takeWhile { d[it] >= limit }.take(8)
+    val pick = inside.ifEmpty { order.take(3) }
+    return Region(pick.map { Near(w.places[it], (acos(d[it].coerceIn(-1f, 1f)) * 6371).roundToInt()) }, inside.isNotEmpty())
 }
 
 /** The card on the Radio home that opens the globe. */
@@ -177,14 +238,19 @@ private fun MiniGlobe(modifier: Modifier) {
     }
 }
 
-/** A spinning Earth with a dot for every place that has radio, like Radio Garden. */
+/**
+ * A spinning Earth with its continents and a dot for every place that has radio, like Radio Garden.
+ * Whatever sits in the circle in the middle is listed below, so there's no need to hit a tiny dot.
+ */
 @Composable
 internal fun GlobePage(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var world by remember { mutableStateOf(GardenGlobe.world) }
+    var land by remember { mutableStateOf(GardenGlobe.land) }
     var failed by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { if (land == null) land = GardenGlobe.land(context) }
     LaunchedEffect(attempt) {
         if (world != null) return@LaunchedEffect
         failed = false
@@ -194,53 +260,60 @@ internal fun GlobePage(onBack: () -> Unit) {
     var lon by remember { mutableFloatStateOf(GardenGlobe.lon) }
     var lat by remember { mutableFloatStateOf(GardenGlobe.lat) }
     var zoom by remember { mutableFloatStateOf(1f) }
-    var touched by remember { mutableLongStateOf(0L) }
-    var picked by remember { mutableStateOf<GlobePlace?>(null) }
-    val cy by animateFloatAsState(if (picked != null) 0.3f else 0.47f, tween(500), label = "cy")
-    DisposableEffect(Unit) { onDispose { GardenGlobe.lon = lon; GardenGlobe.lat = lat } }
-    BackHandler(picked != null) { picked = null }
+    var exploring by remember { mutableStateOf(GardenGlobe.explored) }
+    var region by remember { mutableStateOf<Region?>(null) }
+    val cy by animateFloatAsState(if (exploring) 0.3f else 0.47f, tween(500), label = "cy")
+    DisposableEffect(Unit) { onDispose { GardenGlobe.lon = lon; GardenGlobe.lat = lat; GardenGlobe.explored = exploring } }
 
-    // A slow spin, which pauses while you're turning it and while a place is open.
-    LaunchedEffect(picked) {
-        if (picked != null) return@LaunchedEffect
+    // A slow spin until you first touch it, so the list below doesn't keep changing.
+    LaunchedEffect(exploring) {
+        if (exploring) return@LaunchedEffect
         var last = 0L
         while (true) withFrameNanos { t ->
-            if (last != 0L && System.currentTimeMillis() - touched > 2500) lon = (lon + (t - last) / 1e9f * 0.12f) % TAU
+            if (last != 0L) lon = (lon + (t - last) / 1e9f * 0.12f) % TAU
             last = t
         }
     }
 
-    fun focus(p: GlobePlace) {
-        picked = p; touched = System.currentTimeMillis()
-        val tLon = Math.toRadians(p.lon.toDouble()).toFloat()
-        val tLat = Math.toRadians(p.lat.toDouble()).toFloat().coerceIn(-1.3f, 1.3f)
+    // Once the globe settles, list what's in the circle.
+    LaunchedEffect(world, exploring) {
+        val w = world ?: return@LaunchedEffect
+        if (!exploring) return@LaunchedEffect
+        snapshotFlow { Triple(lat, lon, zoom) }.collectLatest { (la, lo, z) ->
+            delay(400)
+            region = withContext(Dispatchers.Default) { nearby(w, la, lo, z) }
+        }
+    }
+
+    /** Swings the globe so this spot sits in the circle. */
+    fun go(tLat: Float, tLon: Float) {
+        exploring = true
         val sLon = lon; val sLat = lat
+        val la = tLat.coerceIn(-1.4f, 1.4f)
         var d = (tLon - sLon) % TAU
         if (d > HALF) d -= TAU
         if (d < -HALF) d += TAU
-        scope.launch { animate(0f, 1f, animationSpec = tween(800)) { v, _ -> lon = sLon + d * v; lat = sLat + (tLat - sLat) * v } }
+        scope.launch { animate(0f, 1f, animationSpec = tween(700)) { v, _ -> lon = sLon + d * v; lat = sLat + (la - sLat) * v } }
     }
 
-    fun nearest(o: Offset, sz: IntSize, max: Float): GlobePlace? {
-        val w = world ?: return null
+    /** The spot on the Earth under a tap, as lat and lon in radians. */
+    fun spot(o: Offset, sz: IntSize): Pair<Float, Float>? {
         val r = min(sz.width, sz.height) * 0.42f * zoom
-        val cx = sz.width / 2f; val cyPx = sz.height * cy
+        val x1 = (o.x - sz.width / 2f) / r; val y2 = (sz.height * cy - o.y) / r
+        val q = x1 * x1 + y2 * y2
+        if (q > 1f) return null
+        val z2 = sqrt(1 - q)
         val cl = cos(lon); val sl = sin(lon); val cp = cos(lat); val sp = sin(lat)
-        var best = -1; var bestD = max * max
-        for (i in 0 until w.n) {
-            val x1 = w.x[i] * cl - w.z[i] * sl
-            val z1 = w.z[i] * cl + w.x[i] * sl
-            val z2 = w.y[i] * sp + z1 * cp
-            if (z2 <= 0f) continue
-            val y2 = w.y[i] * cp - z1 * sp
-            val dx = cx + r * x1 - o.x; val dy = cyPx - r * y2 - o.y
-            val dd = dx * dx + dy * dy
-            if (dd < bestD) { bestD = dd; best = i }
-        }
-        return if (best >= 0) w.places[best] else null
+        val y = y2 * cp + z2 * sp
+        val z1 = -y2 * sp + z2 * cp
+        val x = x1 * cl + z1 * sl
+        val z = z1 * cl - x1 * sl
+        return asin(y.coerceIn(-1f, 1f)) to atan2(x, z)
     }
 
     val paint = remember { NativePaint(NativePaint.ANTI_ALIAS_FLAG).apply { strokeCap = NativePaint.Cap.ROUND } }
+    val fill = remember { Path() }
+    val coast = remember { Path() }
     val atmo = Fidelis.glow1
 
     Box(Modifier.fillMaxSize()) {
@@ -248,20 +321,49 @@ internal fun GlobePage(onBack: () -> Unit) {
             Modifier.fillMaxSize()
                 .pointerInput(Unit) {
                     detectTransformGestures { _, pan, z, _ ->
-                        touched = System.currentTimeMillis()
+                        exploring = true
                         zoom = (zoom * z).coerceIn(1f, 8f)
                         val r = min(size.width, size.height) * 0.42f * zoom
                         lon = (lon - pan.x / r) % TAU
                         lat = (lat + pan.y / r).coerceIn(-1.4f, 1.4f)
                     }
                 }
-                .pointerInput(Unit) { detectTapGestures { o -> nearest(o, size, 28.dp.toPx())?.let { focus(it) } } },
+                .pointerInput(Unit) { detectTapGestures { o -> spot(o, size)?.let { (la, lo) -> go(la, lo) } } },
         ) {
-            val r = min(size.width, size.height) * 0.42f * zoom
+            val base = min(size.width, size.height) * 0.42f
+            val r = base * zoom
             val c = Offset(size.width / 2, size.height * cy)
             drawCircle(Brush.radialGradient(listOf(atmo.copy(alpha = 0.35f), Color.Transparent), c, r * 1.3f), r * 1.3f, c)
             drawCircle(Brush.radialGradient(listOf(Color(0xFF1B3A6B), Color(0xFF071022)), c + Offset(-r * 0.4f, -r * 0.4f), r * 1.7f), r, c)
             val cl = cos(lon); val sl = sin(lon); val cp = cos(lat); val sp = sin(lat)
+
+            // The continents. Points round the back are pinned to the edge so the shapes stay closed.
+            val g = land
+            if (g != null) {
+                fill.reset(); coast.reset()
+                for (k in 0 until g.starts.size - 1) {
+                    val a = g.starts[k]; val b = g.starts[k + 1]
+                    var seen = false
+                    for (i in a until b) if (g.y[i] * sp + (g.z[i] * cl + g.x[i] * sl) * cp > 0f) { seen = true; break }
+                    if (!seen) continue
+                    var pen = false
+                    for (i in a until b) {
+                        val x1 = g.x[i] * cl - g.z[i] * sl
+                        val z1 = g.z[i] * cl + g.x[i] * sl
+                        var px = x1; var py = g.y[i] * cp - z1 * sp
+                        val vis = g.y[i] * sp + z1 * cp > 0f
+                        if (!vis) { val m = sqrt(px * px + py * py).coerceAtLeast(1e-4f); px /= m; py /= m }
+                        val sx = c.x + r * px; val sy = c.y - r * py
+                        if (i == a) fill.moveTo(sx, sy) else fill.lineTo(sx, sy)
+                        if (vis && pen) coast.lineTo(sx, sy) else if (vis) coast.moveTo(sx, sy)
+                        pen = vis
+                    }
+                    fill.close()
+                }
+                drawPath(fill, LAND)
+                drawPath(coast, COAST, style = Stroke(1.dp.toPx()))
+            }
+
             world?.let { w ->
                 var nf = 0; var ne = 0; var nb = 0
                 for (i in 0 until w.n) {
@@ -286,15 +388,17 @@ internal fun GlobePage(onBack: () -> Unit) {
                 paint.color = Color(0xFFC4FFE0).toArgb(); nc.drawPoints(w.bright, 0, nb, paint)
             }
             drawCircle(Color.White.copy(alpha = 0.10f), r, c, style = Stroke(1.dp.toPx()))
-            picked?.let { p ->
-                val la = Math.toRadians(p.lat.toDouble()).toFloat(); val lo = Math.toRadians(p.lon.toDouble()).toFloat()
-                val x = cos(la) * sin(lo); val y = sin(la); val z = cos(la) * cos(lo)
-                val x1 = x * cl - z * sl; val z1 = z * cl + x * sl
-                if (y * sp + z1 * cp > 0f) {
-                    val at = Offset(c.x + r * x1, c.y - r * (y * cp - z1 * sp))
-                    drawCircle(Color.White, 9.dp.toPx(), at, style = Stroke(2.dp.toPx()))
-                    drawCircle(DOT, 4.dp.toPx(), at)
+
+            if (exploring) {
+                // The places in the list light up, and the circle shows what's being listed.
+                region?.near?.forEach { n ->
+                    val la = Math.toRadians(n.place.lat.toDouble()).toFloat(); val lo = Math.toRadians(n.place.lon.toDouble()).toFloat()
+                    val x = cos(la) * sin(lo); val y = sin(la); val z = cos(la) * cos(lo)
+                    val x1 = x * cl - z * sl; val z1 = z * cl + x * sl
+                    if (y * sp + z1 * cp > 0f) drawCircle(Color.White, 3.5.dp.toPx(), Offset(c.x + r * x1, c.y - r * (y * cp - z1 * sp)))
                 }
+                drawCircle(Color.White.copy(alpha = 0.85f), base * REACH * 3, c, style = Stroke(1.5.dp.toPx()))
+                drawCircle(Color.White.copy(alpha = 0.08f), base * REACH * 3, c)
             }
         }
 
@@ -306,48 +410,72 @@ internal fun GlobePage(onBack: () -> Unit) {
                 Text(world?.let { "%,d PLACES".format(it.n) } ?: "EXPLORE", color = Fidelis.violet, style = MaterialTheme.typography.labelMedium)
                 Text("Radio globe", color = Fidelis.ink, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold))
             }
-            IconCircle(Icons.Rounded.Shuffle, "Random place", { world?.places?.randomOrNull()?.let { focus(it) } })
+            IconCircle(Icons.Rounded.Shuffle, "Random place", {
+                world?.places?.randomOrNull()?.let { p ->
+                    go(Math.toRadians(p.lat.toDouble()).toFloat(), Math.toRadians(p.lon.toDouble()).toFloat())
+                }
+            })
         }
 
+        val reg = region
         when {
             failed && world == null -> EmptyState("The globe is out of reach", "Check your connection and try again.",
                 Modifier.align(Alignment.Center).padding(24.dp), actionLabel = "Try again", onAction = { attempt++ })
             world == null -> Text("Finding the world's radio…", color = Fidelis.inkSoft, style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.align(Alignment.Center))
-            picked == null -> Text("Drag to spin · pinch to zoom · tap a dot", color = Fidelis.inkMute,
+            !exploring -> Text("Drag the globe or tap anywhere to tune in", color = Fidelis.inkMute,
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = chromeBottom() + 12.dp))
+            reg != null -> RegionPanel(reg, Modifier.align(Alignment. BottomCenter))
         }
-
-        picked?.let { p -> PlacePanel(p, Modifier.align(Alignment.BottomCenter)) { picked = null } }
     }
 }
 
+/** The stations in and around the circle, grouped by place, nearest first. */
 @Composable
-private fun PlacePanel(p: GlobePlace, modifier: Modifier, onClose: () -> Unit) {
-    var list by remember(p.id) { mutableStateOf<List<Station>?>(null) }
-    LaunchedEffect(p.id) { list = runCatching { GardenGlobe.stations(p) }.getOrDefault(emptyList()) }
-    val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    Column(modifier.fillMaxWidth().fillMaxHeight(0.55f).clip(shape).background(Fidelis.bg1.copy(alpha = 0.95f))
-        .border(1.dp, Fidelis.border, shape)) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 14.dp, top = 18.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(p.country.uppercase(), color = Fidelis.violet, style = MaterialTheme.typography.labelMedium)
-                Text(p.title, color = Fidelis.ink, maxLines = 1,
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold))
+private fun RegionPanel(region: Region, modifier: Modifier) {
+    var lists by remember(region) { mutableStateOf<Map<String, List<Station>>>(emptyMap()) }
+    LaunchedEffect(region) {
+        region.near.forEach { n ->
+            launch {
+                val l = runCatching { GardenGlobe.stations(n.place) }.getOrDefault(emptyList())
+                lists = lists + (n.place.id to l)
             }
-            IconCircle(Icons.Rounded.Close, "Close", onClick = onClose, size = 38.dp)
         }
-        val l = list
+    }
+    val first = region.near.first().place
+    val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    Column(modifier.fillMaxWidth().fillMaxHeight(0.5f).clip(shape).background(Fidelis.bg1.copy(alpha = 0.95f))
+        .border(1.dp, Fidelis.border, shape)) {
+        Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 4.dp)) {
+            Text(if (region.inside) "NEAR · ${first.country.uppercase()}" else "OPEN SEA · NEAREST RADIO",
+                color = Fidelis.violet, style = MaterialTheme.typography.labelMedium)
+            Text(first.title, color = Fidelis.ink, maxLines = 1,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold))
+        }
         LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(bottom = chromeBottom())) {
-            when {
-                l == null -> items(4) { SkeletonBox(Modifier.padding(horizontal = 20.dp, vertical = 7.dp).fillMaxWidth().height(56.dp)) }
-                l.isEmpty() -> item {
-                    Text("Nothing on air here right now.", color = Fidelis.inkMute, style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(20.dp))
+            region.near.forEach { n ->
+                val id = n.place.id
+                item(key = "h$id") {
+                    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(n.place.title, color = Fidelis.ink, maxLines = 1, modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                        Text(if (n.km < 1) "here" else "%,d km".format(n.km), color = Fidelis.inkMute,
+                            style = MaterialTheme.typography.labelMedium)
+                    }
                 }
-                else -> items(l, key = { it.id }) { StationRow(it) }
+                val l = lists[id]
+                when {
+                    l == null -> item(key = "s$id") {
+                        SkeletonBox(Modifier.padding(horizontal = 20.dp, vertical = 7.dp).fillMaxWidth().height(56.dp))
+                    }
+                    l.isEmpty() -> item(key = "e$id") {
+                        Text("Nothing on air here right now.", color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+                    }
+                    else -> items(l, key = { id + it.id }) { StationRow(it) }
+                }
             }
         }
     }
