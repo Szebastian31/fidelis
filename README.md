@@ -22,6 +22,7 @@ https://buycoffee.to/szebastian
 - **A queue that's yours.** Play next, add to queue, drag songs into a new order, shuffle or clear Up next. **Previous** goes back through the last 10 songs you played, instead of just restarting the current one.
 - **Add to playlist.** Tap **+** next to ❤ in the player, or ⋮ › **Add to playlist** on any song: Up next, albums, artists, playlists, search and mixes. It lists the playlists you made or collaborate on.
 - **Share, Spotify style.** A card in the cover's colour, then the apps you have (Instagram Stories, WhatsApp, Telegram, Messenger…), Copy link and More. Stories get a ready-made story image; chats get an open.spotify.com link.
+- **Looks that live.** Every sky drifts and breathes while music plays, with a little star dust, and takes on the playing cover's colour (Profile → Follow the music). Glass cards and buttons catch the light like Consensus Weather.
 - **Search everything in one bar.** Results come back as Artists, Albums and Songs.
 - **Artist pages.** Albums, then Singles & EPs, then their songs ordered by popularity on Last.fm, with play counts.
 - **Artist radio.** Mostly that artist, with songs in a similar vibe mixed in: two of theirs, then one similar.

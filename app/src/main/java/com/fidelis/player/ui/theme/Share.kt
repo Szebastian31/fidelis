@@ -148,8 +148,8 @@ internal fun ShareContent(title: String, artist: String, uri: String, image: Any
                         busy = false
                         send(Intent(Intent.ACTION_SEND).setType("image/png")
                             .putExtra(Intent.EXTRA_STREAM, img).putExtra(Intent.EXTRA_TEXT, link)
-                            .setClipData(ClipData.newRawUri("", img))
-                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).setPackage(app.pkg))
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).setPackage(app.pkg)
+                            .apply { clipData = ClipData.newRawUri("", img) })
                     }
                 }
             }

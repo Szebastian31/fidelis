@@ -1,5 +1,6 @@
 package com.fidelis.player.ui.theme
 
+import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
@@ -20,12 +21,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui. Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -35,9 +38,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector. ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -48,46 +52,105 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.fidelis.player.integration.spotify.SpotifyRemote
 import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.random.Random
 
 /** Design tokens. Every screen pulls colour from here, never ad-hoc. Colours follow the look (Skin). */
 object Fidelis {
-    var bg0 by mutableStateOf(Skin.Night.top); private set
-    var bg1 by mutableStateOf(lerp(Skin.Night.top, Skin.Night.mid, 0.55f)); private set
-    var bg2 by mutableStateOf(Skin.Night.mid); private set
-    var bg3 by mutableStateOf(Skin.Night.bottom); private set
-    var glow1 by mutableStateOf(Skin.Night.glow1); private set
-    var glow2 by mutableStateOf(Skin.Night.glow2); private set
-    var glow3 by mutableStateOf(Skin.Night.glow3); private set
-    var purple by mutableStateOf(Skin.Night.start); private set
-    var pink by mutableStateOf(Skin.Night.end); private set
-    var violet by mutableStateOf(Skin.Night.highlight); private set
+    private var skin by mutableStateOf(Skin.Night)
+    /** The playing cover's colour as it settles in, and how far it has (0 = the look's own colours). */
+    var moodColor by mutableStateOf(Skin.Night.start); private set
+    var moodAmount by mutableFloatStateOf(0f); private set
+
+    val bg0: Color get() = skin.top
+    val bg1: Color get() = lerp(skin.top, skin.mid, 0.55f)
+    val bg2: Color get() = skin.mid
+    val bg3: Color get() = skin.bottom
+    val glow1: Color get() = skin.glow1
+    val glow2: Color get() = skin.glow2
+    val glow3: Color get() = skin.glow3
+    val wash: Float get() = skin.wash
+    val purple: Color get() = lerp(skin.start, moodColor, 0.6f * moodAmount)
+    val pink: Color get() = skin.end
+    val violet: Color get() = lerp(skin.highlight, lerp(moodColor, Color.White, 0.55f), 0.55f * moodAmount)
     val orange = Color(0xFFFF9E5A); val sky = Color(0xFF7CC4F5)
     val ink = Color(0xFFFFFFFF); val inkSoft = Color(0xD9FFFFFF)
     val inkMute = Color(0x8CFFFFFF); val inkFaint = Color(0x52FFFFFF)
     val glass = Color(0x14FFFFFF); val glassStrong = Color(0x26FFFFFF); val line = Color(0x1FFFFFFF)
-    val border = Brush.verticalGradient(listOf(Color(0x40FFFFFF), Color(0x0AFFFFFF)))
+    val border = Brush.verticalGradient(listOf(Color(0x47FFFFFF), Color(0x0AFFFFFF)))
+    /** Light catching the top edge of glass. */
+    val sheen = Brush.verticalGradient(listOf(Color(0x14FFFFFF), Color.Transparent))
     val skyGradient: Brush get() = Brush.verticalGradient(0f to bg0, 0.6f to bg2, 1f to bg3)
     val accent: Brush get() = Brush.linearGradient(listOf(purple, pink))
 
-    fun applySkin(s: Skin) {
-        bg0 = s.top; bg1 = lerp(s.top, s.mid, 0.55f); bg2 = s.mid; bg3 = s.bottom
-        glow1 = s.glow1; glow2 = s.glow2; glow3 = s.glow3
-        purple = s.start; pink = s.end; violet = s.highlight
+    fun applySkin(s: Skin) { skin = s }
+    internal fun setMood(c: Color, amount: Float) { moodColor = c; moodAmount = amount }
+}
+
+/** What's playing, for the parts of the app that react to it. Set by the app shell. */
+object Ambience {
+    var tint by mutableStateOf<Color?>(null)
+    var playing by mutableStateOf(false)
+    var follow by mutableStateOf(true); private set
+    private const val PREFS = "fidelis_look"
+    fun load(context: Context) { follow = context.getSharedPreferences(PREFS, 0).getBoolean("follow", true) }
+    fun setFollow(context: Context, on: Boolean) {
+        follow = on
+        context.getSharedPreferences(PREFS, 0).edit().putBoolean("follow", on).apply()
     }
 }
 
-/** The family sky: a gradient with three soft glows, like the banners of the sibling apps. */
+/**
+ * The family sky, alive: three soft glows that drift and breathe while music plays, a wash of the
+ * cover's colour and a little star dust. Screens settle in with a short lift.
+ */
 @Composable
 fun FidelisBackground(content: @Composable () -> Unit) {
-    val g1 = Fidelis.glow1; val g2 = Fidelis.glow2; val g3 = Fidelis.glow3
-    Box(
-        Modifier.fillMaxSize().background(Fidelis.skyGradient).drawBehind {
-            val w = size.width; val h = size.height
-            drawRect(Brush.radialGradient(listOf(g1, Color.Transparent), center = Offset(w * 0.14f, h * 0.06f), radius = w * 0.9f))
-            drawRect(Brush.radialGradient(listOf(g2, Color.Transparent), center = Offset(w * 0.9f, h * 0.3f), radius = w * 0.8f))
-            drawRect(Brush.radialGradient(listOf(g3, Color.Transparent), center = Offset(w * 0.4f, h * 1.04f), radius = w))
-        }
-    ) { content() }
+    // A slow clock. About 30 steps a second is plenty for motion this gentle, and easy on the battery.
+    var time by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        val start = withFrameMillis { it }
+        while (true) { delay(33); time = (withFrameMillis { it } - start) / 1000f }
+    }
+    val live by animateFloatAsState(if (Ambience.playing) 1f else 0f, tween(1800), label = "live")
+    val settle = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { settle.animateTo(1f, tween(560, easing = FastOutSlowInEasing)) }
+    Box(Modifier.fillMaxSize().drawBehind { drawSky(time, live) }) {
+        Box(Modifier.fillMaxSize().graphicsLayer {
+            val s = settle.value
+            alpha = 0.35f + 0.65f * s
+            translationY = (1f - s) * 10.dp.toPx()
+        }) { content() }
+    }
+}
+
+/** Fixed spots for the star dust: x, y and a twinkle phase each. */
+private val Dust = Random(31).let { r -> FloatArray(26 * 3) { r.nextFloat() } }
+
+private fun DrawScope.drawSky(time: Float, live: Float) {
+    val w = size.width; val h = size.height
+    val mood = Fidelis.moodColor
+    val amt = Fidelis.moodAmount * Fidelis.wash
+    val motion = 0.35f + 0.65f * live
+    val a = time * 0.12f
+    val breathe = 1f + 0.1f * live * sin(time * 0.9f)
+    drawRect(Brush.verticalGradient(0f to Fidelis.bg0, 0.6f to Fidelis.bg2, 1f to Fidelis.bg3))
+    fun glow(c: Color, x: Float, y: Float, r: Float) =
+        drawRect(Brush.radialGradient(listOf(c, Color.Transparent), center = Offset(x, y), radius = r))
+    glow(lerp(Fidelis.glow1, mood.copy(alpha = 0.46f), amt),
+        w * (0.16f + 0.07f * motion * sin(a)), h * (0.07f + 0.03f * motion * cos(a * 0.8f)), w * 0.95f * breathe)
+    glow(lerp(Fidelis.glow2, mood.copy(alpha = 0.30f), amt * 0.75f),
+        w * (0.88f + 0.06f * motion * cos(a * 0.7f)), h * (0.32f + 0.05f * motion * sin(a * 0.6f)), w * 0.8f * (2f - breathe))
+    glow(Fidelis.glow3, w * (0.42f + 0.1f * motion * sin(a * 0.5f)), h * 1.04f, w)
+    if (amt > 0.01f) drawRect(Brush.verticalGradient(0f to mood.copy(alpha = 0.2f * amt), 0.5f to Color.Transparent))
+    val dot = 1.1.dp.toPx()
+    for (i in 0 until Dust.size / 3) {
+        val p = Dust[i * 3 + 2]
+        val twinkle = 0.5f + 0.5f * sin(time * (0.6f + p) + p * 6.283f)
+        drawCircle(Color.White.copy(alpha = 0.06f + 0.22f * twinkle), radius = dot * (0.7f + p * 0.6f),
+            center = Offset(Dust[i * 3] * w, Dust[i * 3 + 1] * h * 0.55f))
+    }
 }
 
 /** A colour taken from the album art, made rich enough to tint surfaces. Null for grey covers. */
@@ -123,7 +186,7 @@ fun Modifier.pressable(enabled: Boolean = true, onClick: () -> Unit): Modifier =
 @Composable
 fun GlassCard(modifier: Modifier = Modifier, radius: Dp = 24.dp, content: @Composable () -> Unit) {
     val shape = RoundedCornerShape(radius)
-    Box(modifier.clip(shape).background(Fidelis.glass).border(1.dp, Fidelis.border, shape)) { content() }
+    Box(modifier.clip(shape).background(Fidelis.glass).background(Fidelis.sheen).border(1.dp, Fidelis.border, shape)) { content() }
 }
 
 @Composable
@@ -155,7 +218,7 @@ fun GradientButton(
     Row(
         modifier.pressable(enabled, onClick).height(52.dp).alpha(if (enabled) 1f else 0.4f)
             .shadow(16.dp, CircleShape, ambientColor = Fidelis.purple, spotColor = Fidelis.purple)
-            .clip(CircleShape).background(Fidelis.accent).padding(horizontal = 22.dp),
+            .clip(CircleShape).background(Fidelis.accent).background(Fidelis.sheen).padding(horizontal = 22.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
         icon?.let { Icon(it, null, tint = Fidelis.ink, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)) }
@@ -170,8 +233,9 @@ fun SoftButton(
 ) {
     Row(
         modifier.pressable(enabled, onClick).height(52.dp).alpha(if (enabled) 1f else 0.4f).clip(CircleShape)
-            .background(Fidelis.glassStrong).border(1.dp, Fidelis.line, CircleShape).padding(horizontal = 22.dp),
-        verticalAlignment = Alignment. CenterVertically, horizontalArrangement = Arrangement.Center,
+            .background(Fidelis.glassStrong).background(Fidelis.sheen).border(1.dp, Fidelis.border, CircleShape)
+            .padding(horizontal = 22.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
         icon?.let { Icon(it, null, tint = Fidelis.ink, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)) }
         Text(text, color = Fidelis.ink, style = MaterialTheme.typography.labelLarge, maxLines = 1)
@@ -181,7 +245,7 @@ fun SoftButton(
 @Composable
 fun FidelisChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val bg = if (selected) Modifier.background(Fidelis.accent)
-             else Modifier.background(Fidelis.glass).border(1.dp, Fidelis.line, CircleShape)
+    else Modifier.background(Fidelis.glass).border(1.dp, Fidelis.border, CircleShape)
     Box(modifier.pressable(onClick = onClick).clip(CircleShape).then(bg).padding(horizontal = 16.dp, vertical = 9.dp)) {
         Text(label, color = if (selected) Fidelis.ink else Fidelis.inkSoft,
             style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -193,9 +257,11 @@ fun IconCircle(
     icon: ImageVector, contentDescription: String?, onClick: () -> Unit,
     size: Dp = 40.dp, filled: Boolean = false,
 ) {
-    val bg = if (filled) Modifier.background(Fidelis.accent)
-             else Modifier.background(Fidelis.glassStrong).border(1.dp, Fidelis.line, CircleShape)
-    Box(Modifier.pressable(onClick = onClick).size(size).clip(CircleShape).then(bg), contentAlignment = Alignment.Center) {
+    // Filled buttons glow in the accent, which follows the playing cover.
+    val glow = if (filled) Modifier.shadow(12.dp, CircleShape, ambientColor = Fidelis.purple, spotColor = Fidelis.purple) else Modifier
+    val bg = if (filled) Modifier.background(Fidelis.accent).background(Fidelis.sheen)
+    else Modifier.background(Fidelis.glassStrong).background(Fidelis.sheen).border(1.dp, Fidelis.border, CircleShape)
+    Box(Modifier.pressable(onClick = onClick).size(size).then(glow).clip(CircleShape).then(bg), contentAlignment = Alignment.Center) {
         Icon(icon, contentDescription, tint = Fidelis.ink, modifier = Modifier.size(size * 0.5f))
     }
 }
@@ -216,7 +282,7 @@ fun TrackRow(
         }
         imageUrl?.let {
             AsyncImage(it, null, Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(Fidelis.glass),
-                contentScale = ContentScale. Crop)
+                contentScale = ContentScale.Crop)
             Spacer(Modifier.width(12.dp))
         }
         Column(Modifier.weight(1f)) {

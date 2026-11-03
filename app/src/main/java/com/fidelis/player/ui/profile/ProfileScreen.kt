@@ -23,6 +23,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -61,6 +65,18 @@ fun ProfileScreen(current: Skin, onSkinChange: (Skin) -> Unit, vm: ProfileViewMo
             SectionLabel("Look")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Skin.entries.forEach { s -> SkinSwatch(s, s == current, Modifier.weight(1f)) { onSkinChange(s) } }
+            }
+            Spacer(Modifier.height(12.dp))
+            GlassCard(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Follow the music", color = Fidelis.ink, style = MaterialTheme.typography.titleSmall)
+                        Text("The sky, buttons and glow take on each cover's colour", color = Fidelis.inkMute,
+                            style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    FidelisChip(if (Ambience.follow) "On" else "Off", Ambience.follow, { Ambience.setFollow(context, !Ambience.follow) })
+                }
             }
 
             SectionLabel("Connections")
@@ -145,28 +161,39 @@ fun ProfileScreen(current: Skin, onSkinChange: (Skin) -> Unit, vm: ProfileViewMo
     }
 }
 
-/** A mini preview of a look: its sky, a glow and the accent. */
+/** A small window onto a look: its sky and glows, a glass card and the accent. */
 @Composable
 private fun SkinSwatch(s: Skin, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(18.dp)
+    val lift by animateFloatAsState(if (selected) 1f else 0f, tween(320), label = "lift")
     Column(modifier.pressable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            Modifier.fillMaxWidth().aspectRatio(0.72f).clip(shape)
-                .background(Brush.verticalGradient(listOf(s.top, s.mid, s.bottom)))
+            Modifier.fillMaxWidth().aspectRatio(0.68f)
+                .graphicsLayer { translationY = -4.dp.toPx() * lift }
+                .shadow((14 * lift).dp, shape, ambientColor = s.start, spotColor = s.start)
+                .clip(shape)
                 .drawBehind {
-                    drawCircle(
-                        Brush.radialGradient(listOf(s.glow1, Color.Transparent),
-                            center = Offset(size.width * 0.3f, size.height * 0.25f), radius = size.width),
-                        radius = size.width, center = Offset(size.width * 0.3f, size.height * 0.25f),
-                    )
+                    drawRect(Brush.verticalGradient(listOf(s.top, s.mid, s.bottom)))
+                    drawRect(Brush.radialGradient(listOf(s.glow1, Color.Transparent),
+                        center = Offset(size.width * 0.25f, size.height * 0.18f), radius = size.width * 1.1f))
+                    drawRect(Brush.radialGradient(listOf(s.glow2, Color.Transparent),
+                        center = Offset(size.width * 0.95f, size.height * 0.55f), radius = size.width * 0.9f))
                 }
-                .border(if (selected) 2.dp else 1.dp, if (selected) Color.White else Fidelis.line, shape),
-            contentAlignment = Alignment.BottomCenter,
+                .border(if (selected) 2.dp else 1.dp,
+                    if (selected) Brush.linearGradient(listOf(s.start, s.end)) else Fidelis.border, shape),
         ) {
-            Box(Modifier.padding(bottom = 10.dp).size(width = 28.dp, height = 8.dp).clip(CircleShape)
-                .background(Brush.linearGradient(listOf(s.start, s.end))))
+            // A tiny glass card and the accent pill, as they'd look in the app.
+            val card = RoundedCornerShape(10.dp)
+            Column(Modifier.align(Alignment.BottomCenter).padding(8.dp).fillMaxWidth()
+                .clip(card).background(Color.White.copy(alpha = 0.10f)).border(1.dp, Fidelis.border, card).padding(6.dp)) {
+                Box(Modifier.fillMaxWidth(0.8f).height(4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.7f)))
+                Spacer(Modifier.height(4.dp))
+                Box(Modifier.fillMaxWidth(0.5f).height(3.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.35f)))
+                Spacer(Modifier.height(6.dp))
+                Box(Modifier.size(width = 22.dp, height = 7.dp).clip(CircleShape).background(Brush.linearGradient(listOf(s.start, s.end))))
+            }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         Text(s.label, color = if (selected) Fidelis.ink else Fidelis.inkMute, style = MaterialTheme.typography.labelMedium,
             maxLines = 1)
     }

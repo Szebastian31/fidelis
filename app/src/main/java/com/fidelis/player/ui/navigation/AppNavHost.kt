@@ -61,6 +61,11 @@ import com.fidelis.player.ui.theme.ChromeInsets
 import com.fidelis.player.ui.theme.Fidelis
 import com.fidelis.player.ui.theme.Skin
 import com.fidelis.player.ui.theme.SwipeMini
+import com.fidelis.player.ui.theme.Ambience
+import com.fidelis.player.ui.theme.artTint
+import androidx.compose.runtime.SideEffect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.fidelis.player.ui.theme.pressable
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
@@ -191,6 +196,9 @@ fun AppChrome(nav: NavHostController, remote: SpotifyRemote, haze: HazeState, mo
     // After 10 minutes on pause the mini player tucks itself away; it comes back when music plays.
     var idle by remember { mutableStateOf(false) }
     val paused = snap?.isPaused != false
+    // The whole app takes its colour and pulse from what's playing.
+    LaunchedEffect(art) { Ambience.tint = art?.let { withContext(Dispatchers.Default) { artTint(it) } } }
+    SideEffect { Ambience.playing = !paused }
     LaunchedEffect(paused) { idle = false; if (paused) { delay(10 * 60_000L); idle = true } }
     AnimatedVisibility(
         visible = route != PLAYER, modifier = modifier,
