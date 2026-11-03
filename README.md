@@ -104,3 +104,8 @@ A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines
 - **Search any podcast.** A search field on Podcasts finds any show on Spotify, by name, host or topic.
 - **Podcasts for you.** "Because you listen to", "From the people behind" and "More in your vibe" rows, plus genre chips with your own genres first. Genres come from Apple Podcasts' public search and are kept on the phone.
 - **A clearer radio globe.** The continents are drawn under the station dots, and a circle in the middle lists the stations in and around it, nearest first. Drag, pinch or tap anywhere to move it. The world map is Natural Earth's, which is public domain.
+
+## New in 1.6.1
+
+- **Podcast search works again.** Spotify stopped accepting the request for shows in your account's country, so Fidelis now passes your country directly. When Spotify finds nothing, Apple Podcasts' search fills in.
+- **Better podcast picks.** "Because you listen to", "About the artists you play", "Your vibe" and charts for your country and the world, from Apple Podcasts' public charts and search. Tap any of them to open it on Spotify.

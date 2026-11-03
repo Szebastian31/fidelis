@@ -47,12 +47,13 @@ fun PodcastsScreen(onOpenShow: (String) -> Unit, onOpenPlayer: () -> Unit, toggl
     val connected by vm.connected.collectAsState()
     val snap by vm.nowPlaying.collectAsState()
     val play: (PodcastEpisode) -> Unit = { vm.play(it); onOpenPlayer() }
+    PodcastNotice(vm.notice, vm::clearNotice)
     FidelisBackground {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = chromeBottom())) {
             item { Box(Modifier.padding(horizontal = 20.dp)) { ScreenHeader("Listen", eyebrow = "Podcasts") { toggle() } } }
             if (connected) item { PodcastSearchField(vm.query, vm::search) }
             when {
-                connected && vm.query.isNotBlank() -> podcastResults(vm.results, vm.shows.map { it.id }.toSet(), onOpenShow)
+                connected && vm.query.isNotBlank() -> podcastResults(vm.results, vm.followed) { vm.open(it, onOpenShow) }
                 !connected -> item {
                     EmptyState("Connect Spotify", "Connect Spotify in Profile and your podcasts appear here.",
                         Modifier.padding(horizontal = 20.dp))
@@ -85,7 +86,7 @@ fun PodcastsScreen(onOpenShow: (String) -> Unit, onOpenPlayer: () -> Unit, toggl
                             items(vm.shows, key = { it.id }) { s -> ShowTile(s) { onOpenShow(s.id) } }
                         }
                     }
-                    podcastPicks(vm.vibe, vm.rows, vm::search, onOpenShow)
+                    podcastPicks(vm.vibe, vm.rows, vm::search) { vm.open(it, onOpenShow) }
                     if (vm.latest.isNotEmpty()) {
                         item { Label("New episodes") }
                         items(vm.latest.take(12), key = { "e" + it.uri }) { e ->
