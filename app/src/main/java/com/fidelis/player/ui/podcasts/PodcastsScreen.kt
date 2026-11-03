@@ -34,7 +34,7 @@ import java.time.temporal.ChronoUnit
 
 /** Your podcasts, like Spotify's: newest episodes first, then the shows you follow. */
 @Composable
-fun PodcastsScreen(onOpenShow: (String) -> Unit, onOpenPlayer: () -> Unit, vm: PodcastsViewModel = hiltViewModel()) {
+fun PodcastsScreen(onOpenShow: (String) -> Unit, onOpenPlayer: () -> Unit, toggle: @Composable () -> Unit = {}, vm: PodcastsViewModel = hiltViewModel()) {
     val connected by vm.connected.collectAsState()
     val snap by vm.nowPlaying.collectAsState()
     FidelisBackground {
@@ -43,7 +43,7 @@ fun PodcastsScreen(onOpenShow: (String) -> Unit, onOpenPlayer: () -> Unit, vm: P
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = chromeBottom()),
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item(span = { GridItemSpan(maxLineSpan) }) { ScreenHeader("Podcasts", eyebrow = "Your shows") }
+            item(span = { GridItemSpan(maxLineSpan) }) { ScreenHeader("Listen", eyebrow = "Podcasts") { toggle() } }
             when {
                 !connected -> item(span = { GridItemSpan(maxLineSpan) }) {
                     EmptyState("Connect Spotify", "Sign in on the Listen tab and your podcasts appear here.")

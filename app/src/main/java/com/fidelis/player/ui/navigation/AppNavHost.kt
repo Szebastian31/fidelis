@@ -31,6 +31,11 @@ import com.fidelis.player.integration.spotify.OpenedItems
 import com.fidelis.player.ui.playlists.SpotifyPageScreen
 import com.fidelis.player.ui.podcasts.PodcastsScreen
 import com.fidelis.player.ui.podcasts.ShowScreen
+import com.fidelis.player.ui.radio.ListenScreen
+import com.fidelis.player.ui.radio.RadioMini
+import com.fidelis.player.ui.radio.RadioSheet
+import com.fidelis.player.radio.Radio as LiveRadio
+import androidx.compose.material.icons.rounded.Radio
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,7 +79,7 @@ import dev.chrisbanes.haze.hazeChild
 private enum class Dest(val route: String, val label: String, val icon: ImageVector) {
     Playlists("playlists", "Playlists", Icons.AutoMirrored.Rounded.QueueMusic),
     Search("search", "Search", Icons.Rounded.Search),
-    Podcasts("podcasts", "Podcasts", Icons.Rounded.Podcasts),
+    Podcasts("podcasts", "Listen", Icons.Rounded.Radio),
     Mood("mood", "Mood", Icons.Rounded.AutoAwesome),
     Profile("profile", "Profile", Icons.Rounded.Person),
 }
@@ -144,7 +149,7 @@ fun AppNavHost(
             }
             composable(Dest.Profile.route) { key(resets["profile"]) { ProfileScreen(currentSkin, onSkinChange) } }
             composable(Dest.Podcasts.route) {
-                key(resets["podcasts"]) { PodcastsScreen(onOpenShow = { id -> nav.navigate("show/$id") }, onOpenPlayer = openPlayer) }
+                key(resets["podcasts"]) { ListenScreen(onOpenShow = { id -> nav.navigate("show/$id") }, onOpenPlayer = openPlayer) }
             }
             composable(SPOTIFY, enterTransition = pageIn, popExitTransition = pageOut) {
                 SpotifyPageScreen(onBack = { nav.popBackStack() }, onOpenPlayer = openPlayer)
@@ -198,7 +203,9 @@ fun AppChrome(nav: NavHostController, remote: SpotifyRemote, haze: HazeState, mo
     val paused = snap?.isPaused != false
     // The whole app takes its colour and pulse from what's playing.
     LaunchedEffect(art) { Ambience.tint = art?.let { withContext(Dispatchers.Default) { artTint(it) } } }
-    SideEffect { Ambience.playing = !paused }
+    SideEffect { Ambience.playing = !paused || LiveRadio.playing }
+    var radioOpen by remember { mutableStateOf(false) }
+    if (radioOpen) RadioSheet(onDismiss = { radioOpen = false })
     LaunchedEffect(paused) { idle = false; if (paused) { delay(10 * 60_000L); idle = true } }
     AnimatedVisibility(
         visible = route != PLAYER, modifier = modifier,
@@ -220,8 +227,12 @@ fun AppChrome(nav: NavHostController, remote: SpotifyRemote, haze: HazeState, mo
                 ))
                 .padding(top = 18.dp),
         ) {
+            val radioShown = LiveRadio.station != null && (LiveRadio.playing || LiveRadio.buffering || paused)
+            AnimatedVisibility(radioShown, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                RadioMini(onOpen = { radioOpen = true }, modifier = Modifier.padding(horizontal = 12.dp))
+            }
             AnimatedVisibility(
-                visible = snap?.title?.isNotBlank() == true && !idle,
+                visible = snap?.title?.isNotBlank() == true && !idle && !radioShown,
                 enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut(),
             ) {
                 snap?.let { s ->
