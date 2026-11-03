@@ -14,7 +14,7 @@ import java.security.SecureRandom
  * 3. exchange code + the same code_verifier for tokens (SpotifyRepository.completeAuth)
  * 4. tokens are stored per-device in EncryptedSharedPreferences (SecureTokenStore)
  *
- * Read-only library scopes; playback goes through the App Remote bridge, which has its own auth.
+ * Library scopes (read your music, add songs to your own playlists); playback goes through the App Remote bridge, which has its own auth.
  */
 class SpotifyPkce(private val clientId: String, private val redirectUri: String) {
 
@@ -28,6 +28,8 @@ class SpotifyPkce(private val clientId: String, private val redirectUri: String)
         "user-read-recently-played",
         "user-read-playback-state",
         "user-modify-playback-state",
+        "playlist-modify-public",
+        "playlist-modify-private",
     )
 
     fun buildAuthUrl(state: String): String {

@@ -105,6 +105,10 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
     val contextMode by vm.contextMode.collectAsState()
     var soundOpen by remember { mutableStateOf(false) }
     if (soundOpen) SoundSheet(onDismiss = { soundOpen = false })
+    var addOpen by remember { mutableStateOf(false) }
+    snap?.uri?.takeIf { addOpen }?.let { u ->
+        AddToPlaylistSheet(snap?.title.orEmpty(), snap?.artist.orEmpty(), art, u, onDismiss = { addOpen = false })
+    }
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val list = rememberLazyListState()
@@ -195,6 +199,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                         onRadio = { snap?.let { s -> actions?.songRadio(s.title, s.artist) } },
                         onDevices = { devicesOpen = true },
                     onSound = { soundOpen = true },
+                    onAddToPlaylist = { addOpen = true },
                         onQueue = { scope.launch { list.animateScrollToItem(1) } },
                     )
                 }
@@ -277,7 +282,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
 
     sheetEntry?.let { e ->
         TrackSheet(
-            title = e.track.title, subtitle = e.track.artist, imageUrl = e.track.imageUrl,
+            uri = e.track.uri, title = e.track.title, subtitle = e.track.artist, imageUrl = e.track.imageUrl,
             actions = listOf(
                 SheetAction("Play now", Icons.Rounded.PlayArrow) { vm.playAt(vm.indexOf(e.id)) },
                 SheetAction("Move to top", Icons.Rounded.VerticalAlignTop) { vm.move(vm.indexOf(e.id), 0) },

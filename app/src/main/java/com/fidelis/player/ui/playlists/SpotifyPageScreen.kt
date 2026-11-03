@@ -99,7 +99,7 @@ fun SpotifyPageScreen(onBack: () -> Unit, onOpenPlayer: () -> Unit, vm: SpotifyP
     }
     menuFor?.let { (i, t) ->
         TrackSheet(
-            title = t.title, subtitle = t.artist, imageUrl = t.imageUrl,
+            uri = t.uri, title = t.title, subtitle = t.artist, imageUrl = t.imageUrl,
             actions = listOf(
                 SheetAction("Play from here", Icons.Rounded.PlayArrow) { vm.playFrom(i); onOpenPlayer() },
                 SheetAction("Play next", Icons.Rounded.SkipNext) { vm.playNext(t); toast("Plays next") },

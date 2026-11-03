@@ -146,7 +146,7 @@ fun SearchScreen(
 
     sheetFor?.let { t ->
         TrackSheet(
-            title = t.title, subtitle = t.artist, imageUrl = t.imageUrl,
+            uri = t.uri, title = t.title, subtitle = t.artist, imageUrl = t.imageUrl,
             actions = listOf(
                 SheetAction("Play now", Icons.Rounded.PlayArrow) {
                     vm.playSong(vm.results?.tracks?.indexOf(t) ?: -1)

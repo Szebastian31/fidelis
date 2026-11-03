@@ -20,6 +20,7 @@ https://buycoffee.to/szebastian
 - **A player made for the cover.** The artwork fills the screen and glows softly under the controls in its own colour. Tap it to see the whole cover (it grows back after 5 seconds), swipe it left or right for the next or previous song, and swipe down to close.
 - **Synced lyrics.** The current line glows and follows the song; tap any line to jump there. Lyrics come from LRCLIB, with plain lyrics when timed ones aren't available.
 - **A queue that's yours.** Play next, add to queue, drag songs into a new order, shuffle or clear Up next. **Previous** goes back through the last 10 songs you played, instead of just restarting the current one.
+- **Add to playlist.** Tap **+** next to ❤ in the player, or ⋮ › **Add to playlist** on any song: Up next, albums, artists, playlists, search and mixes. It lists the playlists you made or collaborate on.
 - **Search everything in one bar.** Results come back as Artists, Albums and Songs.
 - **Artist pages.** Albums, then Singles & EPs, then their songs ordered by popularity on Last.fm, with play counts.
 - **Artist radio.** Mostly that artist, with songs in a similar vibe mixed in: two of theirs, then one similar.

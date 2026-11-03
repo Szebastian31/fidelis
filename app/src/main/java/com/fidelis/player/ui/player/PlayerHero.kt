@@ -1,12 +1,11 @@
 package com.fidelis.player.ui.player
 
 import android.graphics.Bitmap
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.animation.core. Spring
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -21,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.AddCircleOutline
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Favorite
@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -57,6 +58,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -69,6 +71,7 @@ import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.ui.theme.Fidelis
 import com.fidelis.player.ui.theme.IconCircle
 import com.fidelis.player.ui.theme.pressable
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -87,6 +90,7 @@ internal fun Hero(
     onScrub: (Float) -> Unit, onScrubEnd: () -> Unit,
     onLyrics: () -> Unit, onShuffle: () -> Unit, onQueue: () -> Unit,
     onArtist: () -> Unit = {}, onRadio: () -> Unit = {}, onDevices: () -> Unit = {}, onSound: () -> Unit = {},
+    onAddToPlaylist: () -> Unit = {},
 ) {
     val img = remember(art) { art?.asImageBitmap() }
     val scope = rememberCoroutineScope()
@@ -99,29 +103,40 @@ internal fun Hero(
     LaunchedEffect(compact) { if (compact) { delay(5_000); compact = false } }
     LaunchedEffect(snap?.uri) { compact = false }
     val t by animateFloatAsState(if (compact) 1f else 0f, tween(420, easing = FastOutSlowInEasing), label = "compact")
+
     var swipeX by remember { mutableFloatStateOf(0f) }
-    // Swipes and the skip buttons send the cover off one side; the next one glides in from the other.
+    var fade by remember { mutableFloatStateOf(1f) }
+    // Skips (swipe or buttons) fade the cover out as it drifts away; the next one fades in
+    // as it settles from the other side, so one song dissolves into the next.
     val screenW = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
     var pending by remember { mutableIntStateOf(0) }
-    val slideIn: () -> Unit = {
+    var leaving by remember { mutableStateOf<Job?>(null) }
+    var arriving by remember { mutableStateOf<Job?>(null) }
+    val fadeIn: () -> Unit = {
         val from = pending
         if (from != 0) {
             pending = 0
-            scope.launch {
-                animate(-from * screenW * 0.45f, 0f, animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow)) { v, _ -> swipeX = v }
+            arriving = scope.launch {
+                leaving?.join()
+                swipeX = -from * screenW * 0.08f
+                launch { animate(fade, 1f, animationSpec = tween(480, easing = LinearOutSlowInEasing)) { v, _ -> fade = v } }
+                animate(swipeX, 0f, animationSpec = tween(560, easing = FastOutSlowInEasing)) { v, _ -> swipeX = v }
             }
         }
     }
     val slide: (Int) -> Unit = { dir ->
-        scope.launch {
-            animate(swipeX, dir * screenW, animationSpec = tween(170, easing = FastOutLinearInEasing)) { v, _ -> swipeX = v }
-            pending = dir
-            if (dir < 0) next() else prev()
+        arriving?.cancel(); leaving?.cancel()
+        pending = dir
+        leaving = scope.launch {
+            launch { animate(fade, 0f, animationSpec = tween(240, easing = FastOutLinearInEasing)) { v, _ -> fade = v } }
+            animate(swipeX, swipeX + dir * screenW * 0.12f, animationSpec = tween(260, easing = FastOutSlowInEasing)) { v, _ -> swipeX = v }
         }
+        // Ask Spotify straight away, so the next song loads while the cover fades.
+        if (dir < 0) next() else prev()
     }
-    LaunchedEffect(img) { slideIn() }
-    LaunchedEffect(snap?.uri) { if (pending != 0) { delay(250); slideIn() } }
-    LaunchedEffect(pending) { if (pending != 0) { delay(900); slideIn() } }
+    LaunchedEffect(img) { fadeIn() }
+    LaunchedEffect(snap?.uri) { if (pending != 0) { delay(450); fadeIn() } }
+    LaunchedEffect(pending) { if (pending != 0) { delay(1_000); fadeIn() } }
 
     Box(modifier.background(base)) {
         if (img != null) {
@@ -135,7 +150,7 @@ internal fun Hero(
             CoverImage(img, null,
                 Modifier.fillMaxWidth().fillMaxHeight(0.88f)
                     .graphicsLayer {
-                        alpha = (1f - t) * (1f - 0.5f * (kotlin.math.abs(swipeX) / screenW).coerceIn(0f, 1f))
+                        alpha = (1f - t) * fade * (1f - 0.4f * (kotlin.math.abs(swipeX) / screenW).coerceIn(0f, 1f))
                         translationX = swipeX
                         compositingStrategy = CompositingStrategy.Offscreen
                     }
@@ -165,7 +180,7 @@ internal fun Hero(
                 Image(img, "Album artwork",
                     Modifier.fillMaxWidth(0.8f).aspectRatio(1f)
                         .graphicsLayer {
-                            alpha = t; scaleX = 0.9f + 0.1f * t; scaleY = 0.9f + 0.1f * t
+                            alpha = t * fade; scaleX = 0.9f + 0.1f * t; scaleY = 0.9f + 0.1f * t
                             translationX = swipeX
                         }
                         .shadow(28.dp, RoundedCornerShape(20.dp), ambientColor = wash, spotColor = wash)
@@ -182,8 +197,8 @@ internal fun Hero(
                     detectHorizontalDragGestures(
                         onDragEnd = {
                             val x = swipeX
-                        if (x < -swipeAt) { tick(); slide(-1) } else if (x > swipeAt) { tick(); slide(1) }
-                        else scope.launch { animate(x, 0f, animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { v, _ -> swipeX = v } }
+                            if (x < -swipeAt) { tick(); slide(-1) } else if (x > swipeAt) { tick(); slide(1) }
+                            else scope.launch { animate(x, 0f, animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { v, _ -> swipeX = v } }
                         },
                         onDragCancel = { swipeX = 0f },
                     ) { change, dx -> change.consume(); swipeX += dx }
@@ -203,22 +218,31 @@ internal fun Hero(
                 .padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(snap?.title?.ifBlank { null } ?: "Nothing playing", color = Color.White,
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp),
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(2.dp))
-                    val artist = snap?.artist.orEmpty()
-                    if (artist.isNotBlank()) {
-                        Row(Modifier.pressable(onClick = onArtist), verticalAlignment = Alignment.CenterVertically) {
-                            Text(artist, color = Fidelis.inkSoft, style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                            Icon(Icons.Rounded.ChevronRight, "Go to $artist", tint = Fidelis.inkMute,
-                                modifier = Modifier.size(20.dp))
+                // Title and artist dissolve into the next song's instead of jumping.
+                Crossfade(snap?.title.orEmpty() to snap?.artist.orEmpty(), Modifier.weight(1f),
+                    animationSpec = tween(380), label = "title") { (title, artist) ->
+                    Column {
+                        Text(title.ifBlank { "Nothing playing" }, color = Color.White,
+                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp),
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(2.dp))
+                        if (artist.isNotBlank()) {
+                            Row(Modifier.pressable(onClick = onArtist), verticalAlignment = Alignment.CenterVertically) {
+                                Text(artist, color = Fidelis.inkSoft, style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                Icon(Icons.Rounded.ChevronRight, "Go to $artist", tint = Fidelis.inkMute,
+                                    modifier = Modifier.size(20.dp))
+                            }
                         }
                     }
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(8.dp))
+                if (snap?.uri != null) {
+                    Box(Modifier.pressable { tick(); onAddToPlaylist() }.size(44.dp), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded. AddCircleOutline, "Add to playlist", tint = Color.White,
+                            modifier = Modifier.size(26.dp))
+                    }
+                }
                 val pop by animateFloatAsState(if (liked) 1.15f else 1f, spring(dampingRatio = 0.4f), label = "heart")
                 Box(Modifier.pressable { tick(); onToggleLike() }.size(48.dp), contentAlignment = Alignment.Center) {
                     Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
@@ -249,7 +273,7 @@ internal fun Hero(
                         .clip(CircleShape).background(Color.White),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(if (playing) Icons.Rounded. Pause else Icons.Rounded.PlayArrow,
+                    Icon(if (playing) Icons. Rounded.Pause else Icons.Rounded.PlayArrow,
                         if (playing) "Pause" else "Play", tint = Color.Black, modifier = Modifier.size(38.dp))
                 }
                 PlainIcon(Icons.Rounded.SkipNext, "Next", 40.dp, { tick(); slide(-1) })
@@ -257,8 +281,8 @@ internal fun Hero(
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 PlainIcon(Icons.Rounded.ChatBubbleOutline, "Lyrics", 24.dp, onLyrics, Fidelis.inkSoft)
-                PlainIcon(Icons.Rounded. Shuffle, "Shuffle Up next", 24.dp, onShuffle, Fidelis.inkSoft)
-                PlainIcon(Icons.Rounded.Radio, "Start song radio", 24.dp, onRadio, Fidelis.inkSoft)
+                PlainIcon(Icons.Rounded.Shuffle, "Shuffle Up next", 24.dp, onShuffle, Fidelis.inkSoft)
+                PlainIcon(Icons.Rounded. Radio, "Start song radio", 24.dp, onRadio, Fidelis.inkSoft)
                 PlainIcon(Icons.Rounded.Tune, "Sound", 24.dp, onSound, Fidelis.inkSoft)
                 PlainIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Up next", 24.dp, onQueue, Fidelis.inkSoft)
             }
@@ -304,20 +328,20 @@ private fun fmt(ms: Long): String {
     return "%d:%02d".format(s / 60, s % 60)
 }
 
-/** The ambient glow behind the player: dissolves into the next cover's colours instead of jumping. */
+/** The ambient glow behind the player: dissolves slowly into the next cover's colours. */
 @Composable
 private fun FadeImage(bitmap: ImageBitmap, contentDescription: String?, modifier: Modifier,
                       contentScale: ContentScale, colorFilter: ColorFilter?) {
-    Crossfade(bitmap, modifier, animationSpec = tween(700), label = "ambient") { b ->
+    Crossfade(bitmap, modifier, animationSpec = tween(900), label = "ambient") { b ->
         Image(b, contentDescription, Modifier.fillMaxSize(), contentScale = contentScale, colorFilter = colorFilter)
     }
 }
 
-/** The big cover: a quick dissolve, so the new cover is already in place as it glides in. */
+/** The big cover: a soft dissolve when a song ends on its own; skips also fade the whole cover. */
 @Composable
 private fun CoverImage(bitmap: ImageBitmap, contentDescription: String?, modifier: Modifier,
                        contentScale: ContentScale, colorFilter: ColorFilter?) {
-    Crossfade(bitmap, modifier, animationSpec = tween(220), label = "cover") { b ->
+    Crossfade(bitmap, modifier, animationSpec = tween(600), label = "cover") { b ->
         Image(b, contentDescription, Modifier.fillMaxSize(), contentScale = contentScale, colorFilter = colorFilter)
     }
 }

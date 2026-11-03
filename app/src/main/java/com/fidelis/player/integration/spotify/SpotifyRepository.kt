@@ -29,6 +29,8 @@ data class SpotifyPlaylist(
     val imageUrl: String?,
     val trackCount: Int,
     val uri: String,
+    /** You made it or collaborate on it, so songs can be added to it. */
+    val editable: Boolean = true,
 )
 
 data class PlaylistTrack(
@@ -91,6 +93,7 @@ class SpotifyRepository @Inject constructor(
         tokenStore.spotifyAccessToken = null
         tokenStore.spotifyRefreshToken = null
         cache = emptyList()
+        meId = null
         _connected.value = false
     }
 
@@ -170,6 +173,7 @@ class SpotifyRepository @Inject constructor(
     suspend fun fetchPlaylists(): List<SpotifyPlaylist> = withContext(Dispatchers.IO) {
         if (tokenStore.spotifyAccessToken == null) return@withContext emptyList()
         val out = ArrayList<SpotifyPlaylist>()
+        val me = myId()
         val ok = paged("https://api.spotify.com/v1/me/playlists?limit=50", 10) { root ->
             val items = root.optJSONArray("items") ?: return@paged
             for (i in 0 until items.length()) {
@@ -185,6 +189,7 @@ class SpotifyRepository @Inject constructor(
                     imageUrl = img?.ifBlank { null },
                     trackCount = counts?.optInt("total") ?: 0,
                     uri = p.optString("uri"),
+                    editable = p.optBoolean("collaborative") || me == null || p.optJSONObject("owner")?.optString("id") == me,
                 )
             }
         }
@@ -261,6 +266,22 @@ class SpotifyRepository @Inject constructor(
             }
         }
     }
+
+    // ---------- Adding to playlists ----------
+
+    @Volatile private var meId: String? = null
+
+    /** Your Spotify user id, fetched once; tells your own playlists from ones you only follow. */
+    private fun myId(): String? = meId ?: getJson("https://api.spotify.com/v1/me")
+        ?.optString("id")?.ifBlank { null }?.also { meId = it }
+
+    /** Adds a song to one of your playlists. Returns the HTTP code: 201 added, 403 sign in again for the new permission. */
+    suspend fun addToPlaylist(playlistId: String, uri: String): Int = withContext(Dispatchers.IO) {
+        val (code, _) = send("POST", "https://api.spotify.com/v1/playlists/$playlistId/items", """{"uris":["$uri"]}""")
+        if (code in 200..299) cache = cache.map { if (it.id == playlistId) it.copy(trackCount = it.trackCount + 1) else it }
+        code
+    }
+
 
     // ---------- Search ----------
 

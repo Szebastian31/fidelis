@@ -242,7 +242,7 @@ private fun SongSheet(
 ) {
     val context = LocalContext.current
     TrackSheet(
-        title = t.title, subtitle = t.artist, imageUrl = t.imageUrl,
+        uri = t.uri, title = t.title, subtitle = t.artist, imageUrl = t.imageUrl,
         actions = listOf(
             SheetAction("Play next", Icons.Rounded.SkipNext) {
                 playNext(t); Toast.makeText(context, "Playing next", Toast.LENGTH_SHORT).show()
