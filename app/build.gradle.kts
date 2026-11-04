@@ -1,3 +1,5 @@
+import java.io.File
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -100,10 +102,10 @@ dependencies {
 // The family signing key never lives in git. GitHub builds get it from the FAMILY_* secrets,
 // local builds from ~/.gradle/gradle.properties.
 val familyProp: (String) -> String? = { k -> System.getenv(k) ?: (findProperty(k) as String?) }
-val familyKeystore: java.io.File? = familyProp("FAMILY_KEYSTORE_PATH")?.let { file(it) }
+val familyKeystore: File? = familyProp("FAMILY_KEYSTORE_PATH")?.let { file(it) }
     ?: System.getenv("FAMILY_KEYSTORE_B64")?.let { b64 ->
-        java.io.File(System.getProperty("java.io.tmpdir"), "family-${rootProject.name}.jks")
-            .apply { writeBytes(java.util.Base64.getMimeDecoder().decode(b64)) }
+        File(System.getProperty("java.io.tmpdir"), "family-${rootProject.name}.jks")
+            .apply { writeBytes(Base64.getMimeDecoder().decode(b64)) }
     }
 
 android {
