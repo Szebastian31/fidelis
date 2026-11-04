@@ -4,6 +4,8 @@
 
 Fidelis plays through the Spotify app on your phone and adds what Spotify doesn't: mixes built from how songs feel, a queue you fully control, synced lyrics and Last.fm scrobbling. No ads, no account of its own, no server.
 
+> **On iPhone:** open [szebastian31.github.io/fidelis](https://szebastian31.github.io/fidelis/) in Safari, tap Share, then **Add to Home Screen**. It is a remote for the Spotify app: play, skip, seek, synced lyrics, Up next and every device Spotify can play on. It signs in with the same Spotify app as the Android version once you add its second Redirect URI, `https://szebastian31.github.io/fidelis/`.
+
 ![Fidelis on five phones: Listen, an artist page, the player, lyrics and Mood](screenshots/banner.png)
 
 ---
@@ -46,7 +48,7 @@ https://buycoffee.to/szebastian
 
 ## Getting started
 
-You need the **Spotify app**, installed and signed in on the same phone. Premium works best: on Spotify Free, Spotify may shuffle instead of playing the exact song you picked.
+You need the **Spotify app**, installed and signed in on the same phone. You need **Spotify Premium**: since February 2026 a Spotify app like the one Fidelis signs in through only works while its owner has Premium.
 
 1. Open **[Releases](../../releases)** on your phone and download **fidelis-debug.apk** from **Latest debug build**.
 2. Open the file. If Android asks, allow your browser to **install unknown apps**.
