@@ -85,6 +85,15 @@ const Tint = {
 
 const I = (d, extra = '') => `<svg viewBox="0 0 24 24" aria-hidden="true"${extra}>${d}</svg>`;
 const ICON = {
+  playlists: I('<path d="M4 6.5h12M4 11.5h12M4 16.5h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M15.5 17.2a2.3 2.3 0 1 0 0 .1zM17.8 17.2V9.5l3 .9" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>'),
+  mood: I('<path d="M12 3.5l1.9 4.9 4.9 1.9-4.9 1.9L12 17.1l-1.9-4.9-4.9-1.9 4.9-1.9zM18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>'),
+  sparkle: I('<path d="M12 3.5l1.9 4.9 4.9 1.9-4.9 1.9L12 17.1l-1.9-4.9-4.9-1.9 4.9-1.9z" fill="currentColor"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="currentColor"/>'),
+  radio: I('<rect x="3" y="8" width="18" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 8 16.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="15.5" cy="14" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6.5 12.5h3M6.5 15.5h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'),
+  pin: I('<path d="M9 3.5h6l-1 5.5 3.5 3.5v1.5h-11V12.5L10 9zM12 14v6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>'),
+  share: I('<path d="M12 3.5v11M8 7.5l4-4 4 4M6.5 11H6a1.5 1.5 0 0 0-1.5 1.5V19A1.5 1.5 0 0 0 6 20.5h12a1.5 1.5 0 0 0 1.5-1.5v-6.5A1.5 1.5 0 0 0 18 11h-.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'),
+  image: I('<rect x="3.5" y="4.5" width="17" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="9.5" r="1.7" fill="currentColor"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>'),
+  trash: I('<path d="M4.5 6.5h15M9.5 6.5V4.5h5v2M6.5 6.5l1 13h9l1-13M10 10v6M14 10v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'),
+  stop: I('<rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor"/>'),
   play: I('<path d="M8 5.6v12.8c0 .8.9 1.3 1.6.9l10-6.4c.6-.4.6-1.4 0-1.8l-10-6.4C8.9 4.3 8 4.8 8 5.6z" fill="currentColor"/>'),
   pause: I('<rect x="6" y="5" width="4" height="14" rx="1.4" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1.4" fill="currentColor"/>'),
   next: I('<path d="M5 6.3v11.4c0 .8.9 1.3 1.5.8l8.2-5.7c.6-.4.6-1.2 0-1.6L6.5 5.5C5.9 5 5 5.5 5 6.3z" fill="currentColor"/><rect x="16.5" y="5" width="2.6" height="14" rx="1.2" fill="currentColor"/>'),
@@ -193,17 +202,26 @@ function sheet(key, build, opts = {}) {
 }
 
 /** "⋮" on any song: play it, queue it, like it, or go to its artist or album. */
-function trackMenu(t, { list, index, context } = {}) {
-  const uri = t.uri;
+/**
+ * "⋮" on any song: play it, queue it, like it, add it to a playlist, share it, start a radio from it, or go to its
+ * artist or album. [extra] adds rows of its own first, as [label, icon, action].
+ */
+function trackMenu(t, { list, index, context, extra = [] } = {}) {
+  const uri = t.uri, song = uri && uri.startsWith('spotify:track:');
+  const go = fn => () => { Layers.close('menu'); fn(); };
   sheet('menu', () => [
-    h('div.row.mhead', null, coverEl(t.album && t.album.images, 52, 'sq'),
+    h('div.row.mhead', null, coverEl(t.album ? t.album.images : t.images, 52, 'sq'),
       h('div.grow', null, h('div.t1', null, t.name), h('div.t2', null, names(t.artists)))),
-    h('button.mi', { onclick: () => { Layers.close('menu'); Player.playTrack(t, { list, index, context }); } }, icon('play'), 'Play now'),
-    h('button.mi', { onclick: async () => { Layers.close('menu'); if (await attempt(() => S.enqueue(uri)) !== undefined) { toast('Added to the queue.'); Player.refreshSoon(); } } }, icon('queue'), 'Add to queue'),
-    h('button.mi', { onclick: async () => { Layers.close('menu'); const [on] = await attempt(() => S.saved([uri]), true) || [false]; await attempt(() => (on ? S.unsave([uri]) : S.save([uri]))); toast(on ? 'Removed from Liked Songs.' : 'Added to Liked Songs.'); Player.likedNow(uri, !on); } }, icon('heartLine'), 'Like or unlike'),
-    t.artists && t.artists[0] && t.artists[0].id && h('button.mi', { onclick: () => { Layers.close('menu'); Layers.close('player'); Nav.push('artist', t.artists[0].id); } }, icon('profile'), `Go to ${t.artists[0].name}`),
-    t.album && t.album.id && h('button.mi', { onclick: () => { Layers.close('menu'); Layers.close('player'); Nav.push('album', t.album.id); } }, icon('listen'), 'Go to the album'),
-    h('a.mi', { href: `https://open.spotify.com/track/${t.id}`, target: '_blank', rel: 'noopener', onclick: () => Layers.close('menu') }, icon('open'), 'Open in Spotify'),
+    extra.map(([label, ic, fn]) => h('button.mi', { onclick: go(fn) }, icon(ic), label)),
+    !extra.length && h('button.mi', { onclick: go(() => Player.playTrack(t, { list, index, context })) }, icon('play'), 'Play now'),
+    h('button.mi', { onclick: go(async () => { if (await attempt(() => S.enqueue(uri)) !== undefined) { toast('Added to the queue.'); Player.refreshSoon(); } }) }, icon('queue'), 'Add to queue'),
+    song && h('button.mi', { onclick: go(async () => { const [on] = await attempt(() => S.saved([uri]), true) || [false]; if (await attempt(() => (on ? S.unsave([uri]) : S.save([uri]))) === undefined) return; toast(on ? 'Removed from Liked Songs.' : 'Added to Liked Songs.'); Player.likedNow(uri, !on); }) }, icon('heartLine'), 'Like or unlike'),
+    song && h('button.mi', { onclick: go(() => addToPlaylist(t)) }, icon('plus'), 'Add to playlist'),
+    h('button.mi', { onclick: go(() => shareSong(t)) }, icon('share'), 'Share'),
+    song && h('button.mi', { onclick: go(() => songRadio(t)) }, icon('radio'), 'Start song radio'),
+    t.artists && t.artists[0] && t.artists[0].id && h('button.mi', { onclick: go(() => { Layers.close('player'); Nav.push('artist', t.artists[0].id); }) }, icon('profile'), `Go to ${t.artists[0].name}`),
+    t.album && t.album.id && h('button.mi', { onclick: go(() => { Layers.close('player'); Nav.push('album', t.album.id); }) }, icon('listen'), 'Go to the album'),
+    h('a.mi', { href: spotifyLink(uri), target: '_blank', rel: 'noopener', onclick: () => Layers.close('menu') }, icon('open'), 'Open in Spotify'),
   ]);
 }
 

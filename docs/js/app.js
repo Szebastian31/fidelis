@@ -1,7 +1,7 @@
 'use strict';
-// The shell (ui/navigation/AppNavHost.kt): three tabs, the mini player above them, and starting up.
+// The shell (ui/navigation/AppNavHost.kt): five tabs in a glass capsule, the mini player above them, and starting up.
 
-const TABS = [['listen', 'Listen'], ['search', 'Search'], ['profile', 'Profile']];
+const TABS = [['playlists', 'Playlists', 'playlists'], ['search', 'Search', 'search'], ['listen', 'Listen', 'radio'], ['mood', 'Mood', 'mood'], ['profile', 'Profile', 'profile']];
 
 const App = {
   shown: null, message: null,
@@ -27,15 +27,14 @@ const App = {
     if (page) {
       const label = Nav.stack.length > 1 ? 'Back' : TABS.find(t => t[0] === Nav.tab)[1];
       screen = h('div.page', null, back(label),
-        page.kind === 'album' ? albumPage(page.id) : page.kind === 'artist' ? artistPage(page.id)
-          : page.kind === 'playlist' ? playlistPage(page.id) : likedPage());
-    } else screen = { listen: listenScreen, search: searchScreen, profile: profileScreen }[Nav.tab]();
+        ({ album: albumPage, artist: artistPage, playlist: playlistPage, liked: likedPage, radioBrowse: radioBrowsePage, show: showPage, mix: mixPage }[page.kind] || likedPage)(page.id));
+    } else screen = { playlists: playlistsScreen, search: searchScreen, listen: listenScreen, mood: moodScreen, profile: profileScreen }[Nav.tab]();
     main.replaceChildren(screen);
     main.scrollTop = !fresh && key === this.shown ? top : 0;
     this.shown = key;
     if (keep) { const s = main.querySelector('.searchIn'); if (s) { s.focus(); s.setSelectionRange(caret, caret); } }
 
-    document.getElementById('tabs').replaceChildren(...TABS.map(([k, label]) => h('button.tab' + (k === Nav.tab ? '.on' : ''), { onclick: () => Nav.go(k) }, icon(k), h('span', null, label))));
+    document.getElementById('tabs').replaceChildren(h('div.capsule', null, ...TABS.map(([k, label, ic]) => h('button.tab' + (k === Nav.tab ? '.on' : ''), { onclick: () => Nav.go(k) }, icon(ic), h('span', null, label)))));
     renderMini();
   },
 

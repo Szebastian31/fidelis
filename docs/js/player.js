@@ -78,6 +78,7 @@ const Player = {
   toggle() {
     if (!this.st) return this.start();
     const on = this.playing;
+    if (!on && Radio.station) Radio.stop();
     this.st.progress_ms = this.position();
     this.run(() => (on ? S.pause() : S.play()), s => { s.is_playing = !on; });
   },
@@ -113,6 +114,8 @@ const Player = {
   },
   async play(what, shuffle = false) {
     this.tapped = Date.now();
+    // one thing at a time: the radio stops for Spotify
+    if (Radio.station) Radio.stop();
     try {
       if (shuffle) await S.shuffle(true).catch(() => {});
       await S.play(what);
@@ -146,9 +149,11 @@ setInterval(() => {
 }, 250);
 
 // ---- the mini player above the tabs: tap to open, swipe for the next or previous song ----
+// The radio's own mini player takes its place while a station plays.
 function renderMini() {
   const box = document.getElementById('mini');
   const t = Player.item;
+  if (Radio.station) { document.body.classList.add('hasMini'); box.replaceChildren(radioMini()); return; }
   document.body.classList.toggle('hasMini', !!t);
   if (!t) { box.replaceChildren(); return; }
   const imgs = t.album ? t.album.images : t.images;
@@ -249,6 +254,8 @@ function playerView() {
       h('div.tools', null,
         h('button.pill.dev', { onclick: () => openDevices() }, icon(dev ? deviceIcon(dev.type) : 'devices'), h('span', null, dev ? dev.name : 'Choose a device')),
         h('div.grow'),
+        t.type === 'track' && h('button.icbtn.glass', { 'aria-label': 'Add to playlist', onclick: () => addToPlaylist(t) }, icon('plus')),
+        h('button.icbtn.glass', { 'aria-label': 'Share', onclick: () => shareSong(t) }, icon('share')),
         t.type === 'track' && h('button.icbtn.glass', { 'aria-label': 'Lyrics', onclick: () => openLyrics() }, icon('lyrics')),
         h('button.icbtn.glass', { 'aria-label': 'Up next', onclick: e => e.target.closest('.scroll').querySelector('.upnext').scrollIntoView({ behavior: 'smooth' }) }, icon('queue')))),
     h('div.upnext', null,

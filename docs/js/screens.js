@@ -18,13 +18,13 @@ const Data = {
 
 /** Each tab keeps its own stack of pages, so Back goes where you came from. */
 const Nav = {
-  tab: 'listen', stacks: { listen: [], search: [], profile: [] }, contextName: {},
-  get stack() { return this.stacks[this.tab]; },
+  tab: ['playlists', 'search', 'listen', 'mood', 'profile'].includes(store.get('tab')) ? store.get('tab') : 'playlists', stacks: { playlists: [], search: [], listen: [], mood: [], profile: [] }, contextName: {},
+  get stack() { return this.stacks[this.tab] || (this.stacks[this.tab] = []); },
   push(kind, id, extra) { this.stack.push({ kind, id, extra, top: 0 }); App.render(true); },
   back() { this.stack.pop(); App.render(); },
   go(tab) {
     if (tab === this.tab && this.stack.length) this.stacks[tab] = [];
-    this.tab = tab; App.render(true);
+    this.tab = tab; store.set('tab', tab); App.render(true);
   },
 };
 
@@ -37,37 +37,104 @@ function greeting() {
   return hr < 5 ? 'Good night' : hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
 }
 
-// ---- Listen ----
-function listenScreen() {
+// ---- Playlists: your library, For you first (ui/playlists/PlaylistsScreen.kt) ----
+const Lib = { mine: false };
+function playlistsScreen() {
   const top = Data.get('top', () => S.topTracks());
   const recent = Data.get('recent', () => S.recent());
-  const artists = Data.get('artists', () => S.topArtists());
+  const artists = Data.get('artists', () => S.topArtists('medium_term', 12));
   const pls = Data.get('playlists', () => S.playlists());
   const me = Data.get('me', () => S.me());
   const first = me && me.display_name ? me.display_name.split(' ')[0] : '';
+  const lists = ((pls && pls.items) || []).filter(Boolean);
+  lists.forEach(p => { Nav.contextName[p.uri] = p.name; });
+  const shelfList = Pins.order(lists);
 
-  const quick = top && top.items ? top.items.slice(0, 8) : [];
-  const seen = new Set();
-  const again = recent && recent.items ? recent.items.map(x => x.track).filter(t => t && !seen.has(t.album.id) && seen.add(t.album.id)).slice(0, 12) : [];
   const out = h('div', null,
-    h('div.hdr', null, h('div.k', null, greeting().toUpperCase() + (first ? `, ${first.toUpperCase()}` : '')), h('h1', null, 'Listen')));
+    h('div.hdr', null, h('div.k', null, greeting().toUpperCase() + (first ? `, ${first.toUpperCase()}` : '')), h('h1', null, 'Playlists')),
+    h('div.chips', { style: { paddingBottom: '6px' } },
+      h('button.chip' + (!Lib.mine ? '.on' : ''), { onclick: () => { Lib.mine = false; App.render(true); } }, 'For you'),
+      h('button.chip' + (Lib.mine ? '.on' : ''), { onclick: () => { Lib.mine = true; App.render(true); } }, 'Your playlists')));
+  const liked = () => h('button.tile', { onclick: () => Nav.push('liked') }, h('div.cover.sq.likedCover', null, icon('heart')), h('div.t1', null, 'Liked Songs'), h('div.t2', null, 'Playlist'));
+
+  if (Lib.mine) {
+    out.append(h('div.grid', { style: { marginTop: '12px' } }, liked(), shelfList.map(playlistTile)),
+      pls === undefined ? loading() : h('div.note.pad', null, 'Tap ⋮ on any playlist to pin it to the top.'));
+    return out;
+  }
   if (top === undefined && recent === undefined) { out.append(loading()); return out; }
 
-  if (quick.length) out.append(h('section', null,
-    h('div.shead', null, h('h2', null, 'Quick picks'), h('span.sub', null, 'your most played, last 4 weeks')),
-    h('div.quick', null, quick.map((t, i) => songRow(t, { list: quick, index: i })))));
-  out.append(
-    shelf('Listen again', again.map(t => tile(t.album.images, t.album.name, names(t.artists), () => Player.playTrack(t, { context: t.album.uri })))) || '',
-    shelf('Heavy rotation', (artists && artists.items || []).map(a => tile(a.images, a.name, 'Artist', () => Nav.push('artist', a.id), true))) || '');
+  if (shelfList.length) out.append(h('section', null,
+    h('div.shead.col', null, h('h2', null, 'Your playlists'), h('span.sub', null, Pins.list.length ? 'Pinned first' : 'Tap ⋮ on any playlist to pin it here')),
+    h('div.shelf.small', null, liked(), shelfList.slice(0, 20).map(playlistTile),
+      h('button.tile.seeall', { onclick: () => { Lib.mine = true; App.render(true); } }, h('div.cover.sq', null, icon('back', 'flip')), h('div.t1', null, 'See all')))));
 
-  const lib = h('section', null, h('div.shead', null, h('h2', null, 'Your library')),
-    h('div.grid', null,
-      h('button.tile', { onclick: () => Nav.push('liked') }, h('div.cover.sq.likedCover', null, icon('heart')), h('div.t1', null, 'Liked Songs'), h('div.t2', null, 'Playlist')),
-      (pls && pls.items || []).filter(Boolean).map(p => { Nav.contextName[p.uri] = p.name; return tile(p.images, p.name, p.owner && p.owner.display_name, () => Nav.push('playlist', p.id)); })));
-  out.append(lib);
+  const rec = recents(recent, lists);
+  if (rec.length) out.append(h('section', null, h('div.shead', null, h('h2', null, 'Recents')),
+    h('div.recents', null, rec.map(r => h('button.rtile', { onclick: r.open }, coverEl(r.images, 56, r.round ? 'circle' : 'sq'), h('div.t1', null, r.name))))));
+
+  const quick = top && top.items ? top.items.slice(0, 8) : [];
+  if (quick.length) out.append(h('section', null,
+    h('div.shead.col', null, h('h2', null, 'Quick picks'), h('span.sub', null, 'Your most played, last 4 weeks')),
+    h('div.quick', null, quick.map((t, i) => songRow(t, { list: quick, index: i })))));
+  const seen = new Set();
+  const again = recent && recent.items ? recent.items.map(x => x.track).filter(t => t && t.album && !seen.has(t.album.id) && seen.add(t.album.id)).slice(0, 12) : [];
+  out.append(
+    shelf('Listen again', again.map(t => tile(t.album.images, t.name, names(t.artists), () => Player.playTrack(t, { context: t.album.uri }))), h('span.sub', null, 'Recently played songs')) || '',
+    shelf('Heavy rotation', (artists && artists.items || []).map(a => tile(a.images, a.name, 'Artist', () => Nav.push('artist', a.id), true)), h('span.sub', null, 'Your top artists, last 6 months')) || '',
+    h('section', null, h('div.shead', null, h('h2', null, 'All your playlists')), h('div.grid', null, liked(), shelfList.map(playlistTile))));
   if (pls === undefined) out.append(loading());
+  else if (!lists.length) out.append(h('div.note.pad', null, "No playlists yet, or Spotify couldn't be reached."));
   return out;
 }
+
+/** What you played lately, as places to go back to: its album, playlist or artist, newest first. */
+function recents(recent, lists) {
+  const out = [], seen = new Set();
+  for (const x of (recent && recent.items) || []) {
+    const t = x.track; if (!t) continue;
+    const c = x.context, uri = c && c.uri;
+    if (uri && seen.has(uri)) continue;
+    if (c && c.type === 'playlist') {
+      const id = uri.split(':').pop(), p = lists.find(l => l.id === id);
+      if (!p) continue;
+      seen.add(uri); out.push({ name: p.name, images: p.images, open: () => Nav.push('playlist', id) });
+    } else if (c && c.type === 'artist') {
+      const a = t.artists.find(z => z.uri === uri) || t.artists[0];
+      seen.add(uri); out.push({ name: a.name, images: t.album.images, round: true, open: () => Nav.push('artist', a.id) });
+    } else if (t.album && !seen.has(t.album.uri)) {
+      seen.add(t.album.uri); out.push({ name: t.album.name, images: t.album.images, open: () => Nav.push('album', t.album.id) });
+    }
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+/** A playlist tile: tap to open, ⋮ to pin it or play it. */
+function playlistTile(p) {
+  const pinned = Pins.has(p.id);
+  return h('div.tile.pl', { onclick: () => Nav.push('playlist', p.id) },
+    coverEl(p.images, 140, 'sq'), pinned && h('span.pin', null, icon('pin')),
+    h('div.row.tl', null, h('div.grow', null, h('div.t1', null, p.name), h('div.t2', null, (p.items || p.tracks || {}).total != null ? songs((p.items || p.tracks).total) : '')),
+      h('button.icbtn.sm', { 'aria-label': 'More', onclick: e => { e.stopPropagation(); playlistMenu(p); } }, icon('more'))));
+}
+function playlistMenu(p) {
+  const pinned = Pins.has(p.id);
+  sheet('menu', () => [
+    h('div.row.mhead', null, coverEl(p.images, 52, 'sq'), h('div.grow', null, h('div.t1', null, p.name), h('div.t2', null, p.owner ? p.owner.display_name : ''))),
+    h('button.mi', { onclick: () => { Layers.close('menu'); Pins.toggle(p.id); App.render(); } }, icon('pin'), pinned ? 'Unpin' : 'Pin to top'),
+    h('button.mi', { onclick: () => { Layers.close('menu'); Player.playContext(p.uri); } }, icon('play'), 'Play'),
+    h('button.mi', { onclick: () => { Layers.close('menu'); Nav.push('playlist', p.id); } }, icon('queue'), 'Open playlist'),
+  ]);
+}
+
+/** Pinned playlists, kept on this phone: they come first in Your playlists. */
+const Pins = {
+  get list() { return store.get('pins') || []; },
+  has(id) { return this.list.includes(id); },
+  toggle(id) { const l = this.list; store.set('pins', l.includes(id) ? l.filter(x => x !== id) : [id, ...l]); toast(l.includes(id) ? 'Unpinned.' : 'Pinned to the top.'); },
+  order(lists) { const p = this.list; return [...p.map(id => lists.find(l => l.id === id)).filter(Boolean), ...lists.filter(l => !p.includes(l.id))]; },
+};
 
 // ---- Search ----
 const Find = { q: '', timer: null, recent: store.get('recentSearches') || [] };
@@ -241,8 +308,8 @@ function profileScreen() {
     h('div.card', null,
       !isStandalone() && h('div', { style: { marginBottom: '10px' } }, h('div.t1', null, 'Add to Home Screen'), h('div.t2', null, 'In Safari: Share, then Add to Home Screen. Fidelis opens like an app, full screen.')),
       h('div.t1', null, 'How it plays'),
-      h('div.t2', null, "Fidelis is a remote for the Spotify app: the music plays in Spotify, on this phone or any speaker, TV or computer it can see. Controlling it needs Spotify Premium. Mood mixes, the radio and Last.fm scrobbling are in Fidelis for Android.")),
-    h('div.note.c', { style: { padding: '18px 22px' } }, 'Fidelis 2.0.0 · web · ', h('a', { href: 'https://github.com/Szebastian31/fidelis', target: '_blank', rel: 'noopener' }, 'GitHub')));
+      h('div.t2', null, "Fidelis is a remote for the Spotify app: the music plays in Spotify, on this phone or any speaker, TV or computer it can see. Controlling it needs Spotify Premium. The radio and podcasts from the web play right here in Fidelis. Last.fm scrobbling is in Fidelis for Android.")),
+    h('div.note.c', { style: { padding: '18px 22px' } }, 'Fidelis 2.1.0 · web · ', h('a', { href: 'https://github.com/Szebastian31/fidelis', target: '_blank', rel: 'noopener' }, 'GitHub')));
 }
 
 async function copy(text) {

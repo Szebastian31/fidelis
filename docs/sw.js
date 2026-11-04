@@ -1,8 +1,8 @@
-// Keeps Fidelis opening without a connection. Its own files only: Spotify and the lyrics are always asked fresh.
-const CACHE = 'fidelis-2.0.0';
-const FILES = ['./', 'index.html', 'style.css', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-full.png',
+// Keeps Fidelis opening without a connection. Its own files only: Spotify, lyrics, radio and podcasts are always asked fresh.
+const CACHE = 'fidelis-2.1.0';
+const FILES = ['./', 'index.html', 'style.css', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-full.png', 'data/land.geojson',
   ...['regular', 'medium', 'semibold', 'bold', 'extrabold'].map(w => `fonts/manrope_${w}.ttf`),
-  ...['spotify', 'ui', 'lyrics', 'player', 'screens', 'app'].map(f => `js/${f}.js`)];
+  ...['spotify', 'ui', 'lyrics', 'radio', 'globe', 'podcasts', 'mood', 'library', 'player', 'screens', 'app'].map(f => `js/${f}.js`)];
 
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
