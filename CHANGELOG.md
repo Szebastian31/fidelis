@@ -1,0 +1,29 @@
+# Changelog
+
+What changed in each version of Fidelis, newest first.
+
+## 1.8.0
+
+- **A new Mood tab: the mood dial.** One colour field, calm to hyped and dark to bright. Drag the dot anywhere, choose Just mine, A few new or Mostly new, and make the mix. Songs are scored against the three nearest feelings, so every spot gives its own blend. A new feeling, Intense, covers the heavy, dark corner.
+## 1.7.0
+
+- **More accurate lyrics.** LRCLIB, NetEase Cloud Music and Kugou are asked at once, and only versions whose title, artist and length fit the recording playing are kept. Timing that fits no source is dropped in favour of plain words.
+- **Word by word.** When NetEase has word timing, each word lights up as it's sung.
+- **Timing nudge and source switch.** Move lyrics earlier or later by a quarter second, or tap the source to try another. Both are remembered per song.
+
+## 1.6.1
+
+- **Podcast search works again.** Spotify stopped accepting the request for shows in your account's country, so Fidelis now passes your country directly. When Spotify finds nothing, Apple Podcasts' search fills in.
+- **Better podcast picks.** "Because you listen to", "About the artists you play", "Your vibe" and charts for your country and the world, from Apple Podcasts' public charts and search. Tap any of them to open it on Spotify.
+
+## 1.6.0
+
+- **Search any podcast.** A search field on Podcasts finds any show on Spotify, by name, host or topic.
+- **Podcasts for you.** "Because you listen to", "From the people behind" and "More in your vibe" rows, plus genre chips with your own genres first. Genres come from Apple Podcasts' public search and are kept on the phone.
+- **A clearer radio globe.** The continents are drawn under the station dots, and a circle in the middle lists the stations in and around it, nearest first. Drag, pinch or tap anywhere to move it. The world map is Natural Earth's, which is public domain.
+
+## 1.5.0
+
+- **Save the song on air.** When a station shows what's playing, tap the search button to find it on Spotify, then like it, add it to a playlist or play it.
+- **Home screen widget.** The song or station on now, on its own colour from the cover, with play, pause and skip.
+- **Radio globe.** A spinning Earth with a dot for every place that has radio, like Radio Garden. Drag, pinch, tap a dot to tune in, or shuffle to land somewhere new.

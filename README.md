@@ -64,9 +64,13 @@ Spotify limits what apps like Fidelis can see. Fidelis can only list the songs o
 
 There's no Fidelis server and no analytics. Your Spotify and Last.fm sign-ins are stored encrypted on your phone. Fidelis talks only to Spotify (your library and playback), Last.fm (song and artist names, for tags, similar songs, popularity and scrobbles) and LRCLIB, NetEase Cloud Music and Kugou (the title, artist and length of the song you open lyrics for). Saved mixes and the tag cache stay on your phone.
 
+## License
+
+Released under the [MIT License](LICENSE).
+
 ---
 
-_Fidelis is Latin for faithful. Its root, fidēs, was also the Roman word for the strings of a lyre. It's a sibling to Consensus Weather, Kalendae, Vestis, Caelum, Hora and Augur._
+_Fidelis is Latin for faithful. Its root, fidēs, was also the Roman word for the strings of a lyre. It's a sibling to Hora, Consensus Weather, Augur, Annales, Kalendae and Caelum, all one tap away in [Hub](https://github.com/Szebastian31/hub)._
 
 <details>
 <summary>For developers</summary>
@@ -87,35 +91,10 @@ A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines
 
 **Keys.** Put `SPOTIFY_CLIENT_ID`, `LASTFM_API_KEY` and `LASTFM_SECRET` in `local.properties` (git-ignored) for local builds, and as repository secrets for GitHub Actions. Never commit them.
 
-**Spotify setup.** In the Spotify developer dashboard, add the redirect URI `fidelis://auth` and the Android package `com.fidelis.player` with the SHA-1 of your own signing key (kept outside the repo; GitHub builds read it from the `FIDELIS_KEYSTORE_B64` and `FIDELIS_KEYSTORE_PASSWORD` secrets). In Development Mode, only accounts added under User Management can sign in.
+**Spotify setup.** In the Spotify developer dashboard, add the redirect URI `fidelis://auth` and the Android package `com.fidelis.player` with the SHA-1 of the family signing key (kept outside the repo; GitHub builds read it from the `FAMILY_*` secrets). In Development Mode, only accounts added under User Management can sign in.
 
 **Build and install:** push to `main`, then run `tools/install.sh`. **Screenshots:** `tools/screenshots.sh`, or `tools/screenshots.sh --banner-only` to rebuild just the banner.
 
+**What changed in each version:** [CHANGELOG.md](CHANGELOG.md).
+
 </details>
-
-## New in 1.5.0
-
-- **Save the song on air.** When a station shows what's playing, tap the search button to find it on Spotify, then like it, add it to a playlist or play it.
-- **Home screen widget.** The song or station on now, on its own colour from the cover, with play, pause and skip.
-- **Radio globe.** A spinning Earth with a dot for every place that has radio, like Radio Garden. Drag, pinch, tap a dot to tune in, or shuffle to land somewhere new.
-
-## New in 1.6.0
-
-- **Search any podcast.** A search field on Podcasts finds any show on Spotify, by name, host or topic.
-- **Podcasts for you.** "Because you listen to", "From the people behind" and "More in your vibe" rows, plus genre chips with your own genres first. Genres come from Apple Podcasts' public search and are kept on the phone.
-- **A clearer radio globe.** The continents are drawn under the station dots, and a circle in the middle lists the stations in and around it, nearest first. Drag, pinch or tap anywhere to move it. The world map is Natural Earth's, which is public domain.
-
-## New in 1.6.1
-
-- **Podcast search works again.** Spotify stopped accepting the request for shows in your account's country, so Fidelis now passes your country directly. When Spotify finds nothing, Apple Podcasts' search fills in.
-- **Better podcast picks.** "Because you listen to", "About the artists you play", "Your vibe" and charts for your country and the world, from Apple Podcasts' public charts and search. Tap any of them to open it on Spotify.
-
-## New in 1.7.0
-
-- **More accurate lyrics.** LRCLIB, NetEase Cloud Music and Kugou are asked at once, and only versions whose title, artist and length fit the recording playing are kept. Timing that fits no source is dropped in favour of plain words.
-- **Word by word.** When NetEase has word timing, each word lights up as it's sung.
-- **Timing nudge and source switch.** Move lyrics earlier or later by a quarter second, or tap the source to try another. Both are remembered per song.
-
-## New in 1.8.0
-
-- **A new Mood tab: the mood dial.** One colour field, calm to hyped and dark to bright. Drag the dot anywhere, choose Just mine, A few new or Mostly new, and make the mix. Songs are scored against the three nearest feelings, so every spot gives its own blend. A new feeling, Intense, covers the heavy, dark corner.
