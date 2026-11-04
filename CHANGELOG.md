@@ -2,6 +2,10 @@
 
 What changed in each version of Fidelis, newest first.
 
+## 2.0.0
+
+- **Your own Spotify app.** Spotify only lets an app's listed accounts sign in, so Fidelis now signs in through a Spotify app you make. Profile → **Your Spotify app** walks you through it and shows the redirect URI, package and SHA-1 to copy. Builds with a Client ID built in keep using it until you paste another.
+
 ## 1.8.0
 
 - **A new Mood tab: the mood dial.** One colour field, calm to hyped and dark to bright. Drag the dot anywhere, choose Just mine, A few new or Mostly new, and make the mix. Songs are scored against the three nearest feelings, so every spot gives its own blend. A new feeling, Intense, covers the heavy, dark corner.

@@ -12,6 +12,7 @@ import com.fidelis.player.integration.lastfm.LastfmApi
 import com.fidelis.player.integration.lastfm.LastfmApiImpl
 import com.fidelis.player.integration.lastfm.LastfmScrobbler
 import com.fidelis.player.integration.lastfm.SimilarityEngine
+import com.fidelis.player.integration.spotify.SpotifyKey
 import com.fidelis.player.integration.spotify.SpotifyMatcher
 import com.fidelis.player.playback.crossfade.CrossfadeEngine
 import dagger.Module
@@ -47,8 +48,9 @@ object AppModule {
     @Provides @Singleton
     fun crossfadeEngine(settings: PlaybackSettings) = CrossfadeEngine(settings.crossfadeMs)
 
-    @Provides @Singleton
-    fun spotifyClientId(): String = BuildConfig.SPOTIFY_CLIENT_ID
+    // Not a singleton: the Client ID can be changed in Profile.
+    @Provides
+    fun spotifyClientId(@ApplicationContext ctx: Context): String = SpotifyKey.clientId(ctx)
 
     // ---- Last.fm ----
     @Provides @Singleton

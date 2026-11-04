@@ -51,8 +51,9 @@ You need the **Spotify app**, installed and signed in on the same phone. Premium
 1. Open **[Releases](../../releases)** on your phone and download **fidelis-debug.apk** from **Latest debug build**.
 2. Open the file. If Android asks, allow your browser to **install unknown apps**.
 3. Open Fidelis and allow **notifications**, so the lock-screen controls and Fluid Cloud work.
-4. In **Profile**, connect your **Spotify account** (playlists, search and library), then **Playback** (the link to the Spotify app). Sign in to **Last.fm** for scrobbling, mood tags and popularity.
-5. **On Oppo / ColorOS:** Profile → **Open app settings**, then turn on **Allow auto launch** and **Allow background activity**, and set **Battery** to **Don't optimise**. Otherwise ColorOS can freeze Fidelis while the screen is off and Up next stops after the current song.
+4. **Make your own Spotify app.** Spotify only lets an app's own listed accounts sign in, so Fidelis signs in through one of yours. In **Profile → Your Spotify app**, follow the four steps (it's free and takes two minutes; Fidelis shows the values to copy) and paste its **Client ID**.
+5. In **Profile**, connect your **Spotify account** (playlists, search and library), then **Playback** (the link to the Spotify app). Sign in to **Last.fm** for scrobbling, mood tags and popularity.
+6. **On Oppo / ColorOS:** Profile → **Open app settings**, then turn on **Allow auto launch** and **Allow background activity**, and set **Battery** to **Don't optimise**. Otherwise ColorOS can freeze Fidelis while the screen is off and Up next stops after the current song.
 
 Updating: install the new APK over the old one. Your sign-ins and mixes stay.
 
@@ -89,9 +90,9 @@ A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines
 | `tools/screenshots.sh`, `tools/banner.html` | Make everything in `screenshots/` from the phone |
 | `.github/workflows/android.yml` | Builds the APK and publishes it to the latest-debug release |
 
-**Keys.** Put `SPOTIFY_CLIENT_ID`, `LASTFM_API_KEY` and `LASTFM_SECRET` in `local.properties` (git-ignored) for local builds, and as repository secrets for GitHub Actions. Never commit them.
+**Keys.** Put `LASTFM_API_KEY` and `LASTFM_SECRET` in `local.properties` (git-ignored) for local builds, and as repository secrets for GitHub Actions. Never commit them. `SPOTIFY_CLIENT_ID` is optional: a build with one uses it until someone pastes their own in Profile, and a build without one asks for it there (`SpotifyKey` decides which is used).
 
-**Spotify setup.** In the Spotify developer dashboard, add the redirect URI `fidelis://auth` and the Android package `com.fidelis.player` with the SHA-1 of the family signing key (kept outside the repo; GitHub builds read it from the `FAMILY_*` secrets). In Development Mode, only accounts added under User Management can sign in.
+**Spotify setup.** Each person's Spotify app needs the redirect URI `fidelis://auth` and the Android package `com.fidelis.player` with the SHA-1 of the key the APK is signed with; Profile shows both, read from the installed APK. Release builds are signed with the family key (kept outside the repo; GitHub builds read it from the `FAMILY_*` secrets). In Development Mode, only accounts added under User Management can sign in.
 
 **Build and install:** push to `main`, then run `tools/install.sh`. **Screenshots:** `tools/screenshots.sh`, or `tools/screenshots.sh --banner-only` to rebuild just the banner.
 

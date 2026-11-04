@@ -6,7 +6,6 @@ import android.graphics. Bitmap
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.fidelis.player.BuildConfig
 import com.fidelis.player.playback.PlaybackService
 import com.spotify.android.appremote.api.ConnectionParams
 import com.spotify.android.appremote.api.Connector
@@ -95,9 +94,11 @@ class SpotifyRemote @Inject constructor() {
     fun connect(context: Context) {
         appContext = context.applicationContext
         if (appRemote?.isConnected == true) { _connected.value = true; _connecting.value = false; return }
+        val clientId = SpotifyKey.clientId(context)
+        if (clientId.isBlank()) { _connecting.value = false; _error.value = NO_KEY; return }
         _connecting.value = true
-        val params = ConnectionParams.Builder(BuildConfig.SPOTIFY_CLIENT_ID)
-            .setRedirectUri("fidelis://auth").showAuthView(false).build()
+        val params = ConnectionParams.Builder(clientId)
+            .setRedirectUri(SpotifyKey.REDIRECT_URI).showAuthView(false).build()
         try {
             SpotifyAppRemote.connect(context, params, object : Connector.ConnectionListener {
                 override fun onConnected(remote: SpotifyAppRemote) {
@@ -457,6 +458,7 @@ class SpotifyRemote @Inject constructor() {
     private companion object {
         const val HANDOVER_MS = 20_000L
         const val HISTORY = 10
+        const val NO_KEY = "Add your Spotify app's Client ID above first"
     }
 }
 

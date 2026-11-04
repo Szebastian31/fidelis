@@ -23,6 +23,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.fidelis.player.integration.lastfm.BridgeScrobbler
 import com.fidelis.player.integration.spotify.RadioLauncher
+import com.fidelis.player.integration.spotify.SpotifyKey
 import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.SpotifyRepository
 import com.fidelis.player.ui.navigation.AppChrome
@@ -117,11 +118,13 @@ class MainActivity : ComponentActivity() {
 
     /** Explicit Spotify authorization (shows the approval screen), then connect App Remote. */
     fun authorizeSpotify() {
+        val clientId = SpotifyKey.clientId(this)
+        if (clientId.isBlank()) { spotifyRemote.connect(this); return } // reports the missing Client ID
         spotifyRemote.markConnecting()
         val request = AuthorizationRequest.Builder(
-            BuildConfig.SPOTIFY_CLIENT_ID,
+            clientId,
             AuthorizationResponse.Type.TOKEN,
-            "fidelis://auth",
+            SpotifyKey.REDIRECT_URI,
         ).setScopes(arrayOf("app-remote-control", "streaming", "user-modify-playback-state")).build()
         AuthorizationClient.openLoginActivity(this, SPOTIFY_AUTH_REQUEST, request)
     }

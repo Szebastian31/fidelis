@@ -1,7 +1,6 @@
 package com.fidelis.player.integration.spotify
 
 import android.content.Context
-import com.fidelis.player.BuildConfig
 import com.fidelis.player.data.db.MusicDao
 import com.fidelis.player.data.db.SpotifyMatchEntity
 import com.fidelis.player.data.secure.SecureTokenStore
@@ -51,8 +50,9 @@ class SpotifyRepository @Inject constructor(
     private val dao: MusicDao,
 ) {
     private val client = OkHttpClient()
-    private val clientId = BuildConfig.SPOTIFY_CLIENT_ID
-    private val redirectUri = "fidelis://auth"
+    // Read each time: it changes when someone pastes their own in Profile.
+    private val clientId: String get() = SpotifyKey.clientId(context)
+    private val redirectUri = SpotifyKey.REDIRECT_URI
     private val refreshLock = Any()
 
     private val _connected = MutableStateFlow(tokenStore.spotifyAccessToken != null)
