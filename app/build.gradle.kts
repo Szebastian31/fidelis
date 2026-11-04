@@ -23,8 +23,8 @@ android {
         applicationId = "com.fidelis.player"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.8.0"
+        versionCode = 11
+        versionName = "1.9.0"
 
         buildConfigField("String", "SPOTIFY_CLIENT_ID", secret("SPOTIFY_CLIENT_ID"))
         buildConfigField("String", "LASTFM_API_KEY", secret("LASTFM_API_KEY"))
@@ -36,16 +36,6 @@ android {
         manifestPlaceholders["redirectHostName"] = "auth"
     }
 
-    signingConfigs {
-        getByName("debug") {
-            // The signing key lives outside the repo: GitHub builds get it from repo secrets, local builds from local.properties.
-            val store = System.getenv("FIDELIS_KEYSTORE") ?: localProps.getProperty("FIDELIS_KEYSTORE")
-            val pass = System.getenv("FIDELIS_KEYSTORE_PASSWORD") ?: localProps.getProperty("FIDELIS_KEYSTORE_PASSWORD")
-            if (store != null && pass != null && file(store).exists()) {
-                storeFile = file(store); storePassword = pass; keyAlias = "fidelis"; keyPassword = pass
-            }
-        }
-    }
 
     buildTypes {
         release {
@@ -105,4 +95,30 @@ dependencies {
     // NOTE: add JAudiotagger and TarsosDSP from their distributions:
     // implementation("net.jthink:jaudiotagger:3.0.1")
     // implementation("com.github.axet:TarsosDSP:2.4-1") // or a maintained fork
+}
+
+// The family signing key never lives in git. GitHub builds get it from the FAMILY_* secrets,
+// local builds from ~/.gradle/gradle.properties.
+val familyProp: (String) -> String? = { k -> System.getenv(k) ?: (findProperty(k) as String?) }
+val familyKeystore: java.io.File? = familyProp("FAMILY_KEYSTORE_PATH")?.let { file(it) }
+    ?: System.getenv("FAMILY_KEYSTORE_B64")?.let { b64 ->
+        java.io.File(System.getProperty("java.io.tmpdir"), "family-${rootProject.name}.jks")
+            .apply { writeBytes(java.util.Base64.getMimeDecoder().decode(b64)) }
+    }
+
+android {
+    signingConfigs {
+        create("family") {
+            if (familyKeystore != null) {
+                storeFile = familyKeystore
+                storePassword = familyProp("FAMILY_KEYSTORE_PASSWORD")
+                keyAlias = familyProp("FAMILY_KEY_ALIAS")
+                keyPassword = familyProp("FAMILY_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        getByName("debug") { signingConfig = signingConfigs.getByName("family") }
+        getByName("release") { signingConfig = signingConfigs.getByName("family") }
+    }
 }

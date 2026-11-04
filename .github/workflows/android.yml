@@ -8,6 +8,13 @@ on:
 permissions:
   contents: write # lets the build publish the APK to the latest-debug release
 
+env:
+  # the family signing key, read by the app build file
+  FAMILY_KEYSTORE_B64: ${{ secrets.FAMILY_KEYSTORE_B64 }}
+  FAMILY_KEYSTORE_PASSWORD: ${{ secrets.FAMILY_KEYSTORE_PASSWORD }}
+  FAMILY_KEY_PASSWORD: ${{ secrets.FAMILY_KEY_PASSWORD }}
+  FAMILY_KEY_ALIAS: ${{ secrets.FAMILY_KEY_ALIAS }}
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -26,11 +33,6 @@ jobs:
           echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> local.properties
           echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
 
-      - name: Signing key (from repo secrets)
-        run: |
-          echo "${{ secrets.FIDELIS_KEYSTORE_B64 }}" | base64 -d > "$RUNNER_TEMP/fidelis.jks"
-          echo "FIDELIS_KEYSTORE=$RUNNER_TEMP/fidelis.jks" >> "$GITHUB_ENV"
-          echo "FIDELIS_KEYSTORE_PASSWORD=${{ secrets.FIDELIS_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
       - name: Build debug APK
         run: |
           chmod +x gradlew

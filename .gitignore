@@ -12,3 +12,9 @@
 *.keystore
 !debug.keystore
 build/
+
+# signing keys never go in git
+*.keystore
+*.jks
+keystore/
+local.properties
