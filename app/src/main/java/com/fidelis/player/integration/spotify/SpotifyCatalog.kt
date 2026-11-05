@@ -20,8 +20,23 @@ data class AlbumItem(
     val isSingle get() = type.equals("single", ignoreCase = true)
 }
 
-data class SearchResults(val artists: List<ArtistItem>, val albums: List<AlbumItem>, val tracks: List<PlaylistTrack>) {
-    val isEmpty get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty()
+/** Anyone's playlist from search. Spotify only lists the songs of your own, so the rest play as a whole. */
+data class PlaylistItem(
+    val id: String, val name: String, val owner: String, val ownerId: String,
+    val imageUrl: String?, val total: Int, val uri: String,
+) {
+    /** "By Spotify \u00B7 50 songs". */
+    val label: String get() = listOfNotNull(
+        owner.takeIf { it.isNotBlank() }?.let { "By $it" },
+        total.takeIf { it > 0 }?.let { "$it songs" },
+    ).joinToString(" \u00B7 ")
+}
+
+data class SearchResults(
+    val artists: List<ArtistItem>, val albums: List<AlbumItem>, val tracks: List<PlaylistTrack>,
+    val playlists: List<PlaylistItem> = emptyList(),
+) {
+    val isEmpty get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty() && playlists.isEmpty()
 }
 
 data class AlbumPage(val album: AlbumItem, val tracks: List<PlaylistTrack>)
@@ -37,7 +52,7 @@ class SpotifyCatalog @Inject constructor(private val repo: SpotifyRepository) {
         val empty = SearchResults(emptyList(), emptyList(), emptyList())
         if (query.isBlank()) return@withContext empty
         val q = URLEncoder.encode(query.trim(), "UTF-8")
-        val root = repo.getJson("$API/search?type=artist,album,track&limit=10&q=$q") ?: return@withContext empty
+        val root = repo.getJson("$API/search?type=artist,album,track,playlist&limit=10&q=$q") ?: return@withContext empty
         SearchResults(
             artists = root.optJSONObject("artists")?.optJSONArray("items").objects()
                 .mapNotNull { it.toArtist() }.distinctBy { it.id },
@@ -45,7 +60,23 @@ class SpotifyCatalog @Inject constructor(private val repo: SpotifyRepository) {
                 .mapNotNull { it.toAlbum() }.distinctBy { it.id },
             tracks = root.optJSONObject("tracks")?.optJSONArray("items").objects()
                 .mapNotNull { it.toPlaylistTrack() }.distinctBy { it.uri },
+            playlists = root.optJSONObject("playlists")?.optJSONArray("items").objects()
+                .mapNotNull { it.toPlaylist() }.distinctBy { it.id },
         )
+    }
+
+    /** The next 10 playlists, for "More playlists". */
+    suspend fun morePlaylists(query: String, offset: Int): List<PlaylistItem> = withContext(Dispatchers.IO) {
+        val q = URLEncoder.encode(query.trim(), "UTF-8")
+        runCatching {
+            repo.getJson("$API/search?type=playlist&limit=10&offset=$offset&q=$q")
+                ?.optJSONObject("playlists")?.optJSONArray("items").objects().mapNotNull { it.toPlaylist() }
+        }.getOrNull().orEmpty()
+    }
+
+    /** A playlist's name, owner and cover, for a pasted link. */
+    suspend fun playlist(id: String): PlaylistItem? = withContext(Dispatchers.IO) {
+        runCatching { repo.getJson("$API/playlists/$id")?.toPlaylist() }.getOrNull()
     }
 
     suspend fun artist(id: String): ArtistItem? = withContext(Dispatchers.IO) {
@@ -111,6 +142,22 @@ private fun JSONObject.image(): String? {
 
 private fun JSONObject.leadArtist(): String =
     optJSONArray("artists").objects().firstOrNull()?.optString("name").orEmpty()
+
+// org.json turns a JSON null into the text "null".
+private fun JSONObject.text(name: String): String = optString(name).takeUnless { it == "null" }.orEmpty()
+
+private fun JSONObject.toPlaylist(): PlaylistItem? {
+    val id = text("id")
+    if (id.isBlank()) return null
+    val owner = optJSONObject("owner")
+    // Newer responses call the song count "items", older ones "tracks".
+    val total = (optJSONObject("items") ?: optJSONObject("tracks"))?.optInt("total") ?: 0
+    return PlaylistItem(
+        id = id, name = text("name"),
+        owner = owner?.text("display_name").orEmpty(), ownerId = owner?.text("id").orEmpty(),
+        imageUrl = image(), total = total, uri = text("uri").ifBlank { "spotify:playlist:$id" },
+    )
+}
 
 private fun JSONObject.toArtist(): ArtistItem? {
     val id = optString("id")

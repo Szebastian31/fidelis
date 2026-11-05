@@ -5,6 +5,11 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 2.3.0
+
+- **Playlist search.** Search now finds playlists from Spotify and anyone else. Tap one to play it, or use the menu to pin it to Your playlists, see the owner's profile in Spotify, or open it in Spotify. Other people's playlists play whole inside Spotify, because Spotify only lets apps list the songs of your own.
+- **Paste a Spotify link.** A playlist link shows the playlist with Play and Pin. A profile link opens that profile in the Spotify app. Spotify stopped letting apps search people in 2026, so this is the way to reach someone's playlists.
+
 ## 2.2.0
 
 - **The queue is a sheet.** It slides up from the bottom and swipes away by its handle: up to five songs you've played, the one playing now, then what's next.
