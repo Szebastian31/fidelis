@@ -85,6 +85,7 @@ class SpotifyRemote @Inject constructor() {
     private val stale = LinkedHashSet<String>()    // handed over, then made obsolete
     private var lastStateAt = 0L
     private var lastArtUri: String? = null
+    private var artFor: String? = null
     private var likedUri: String? = null
     private var ticker: Job? = null
 
@@ -133,11 +134,15 @@ class SpotifyRemote @Inject constructor() {
         ) { _state.value = snap; skipNext(); return }
         _state.value = snap
         lastStateAt = SystemClock.elapsedRealtime()
-        if (t?.imageUri != null && t.imageUri.raw != lastArtUri) {
-            lastArtUri = t.imageUri.raw
-            val want = t.imageUri.raw
-            remote.imagesApi.getImage(t.imageUri, com.spotify.protocol.types. Image.Dimension.LARGE)
-                .setResultCallback { bmp -> if (lastArtUri == want) _artwork.value = bmp }
+        val artRaw = t?.imageUri?.raw?.takeIf { it.isNotBlank() && it != "spotify:image:" }
+        if (artRaw == null) {
+            // No cover for this song: clear the last one, so the vinyl cover shows.
+            if (t?.uri != null && t.uri != artFor) { artFor = t.uri; lastArtUri = null; _artwork.value = null }
+        } else if (artRaw != lastArtUri) {
+            lastArtUri = artRaw; artFor = t.uri
+            val call = remote.imagesApi.getImage(t.imageUri, com.spotify.protocol.types.Image.Dimension.LARGE)
+            call.setResultCallback { bmp -> if (lastArtUri == artRaw) _artwork.value = bmp }
+            call.setErrorCallback { if (lastArtUri == artRaw) _artwork.value = null }
         }
         if (t?.uri != null && t.uri != likedUri) refreshLiked(t.uri, remote)
         if (snap.uri != null) reconcile(snap)

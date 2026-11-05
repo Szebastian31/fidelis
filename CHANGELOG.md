@@ -4,6 +4,12 @@ What changed in each version of Fidelis, newest first.
 
 
 
+
+## 2.2.0
+
+- **The queue is a sheet.** It slides up from the bottom and swipes away by its handle: up to five songs you've played, the one playing now, then what's next.
+- **Vinyl cover, for real.** Songs without art no longer keep the last song's cover.
+- **Fixed odd characters** such as "Â" after Up next and in the lyrics.
 ## 2.1.0
 
 - **Vinyl cover for songs without art.** A record with a blank label and the song's name on it, on Now Playing and in Up next.

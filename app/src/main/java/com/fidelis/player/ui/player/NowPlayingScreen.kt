@@ -184,6 +184,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
     var dragOffset by remember { mutableFloatStateOf(0f) }
     val rowPx = with(density) { ROW.toPx() }
     var sheetEntry by remember { mutableStateOf<QueueEntry?>(null) }
+    var queueOpen by rememberSaveable { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
         Box(
@@ -220,72 +221,9 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                     onSound = { soundOpen = true },
                     onAddToPlaylist = { addOpen = true },
                     onShare = { shareOpen = true },
-                        onQueue = { scope.launch { list.animateScrollToItem(1) } },
+                        onQueue = { queueOpen = true },
                     )
                 }
-                item {
-                    Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 20.dp, top = 20.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (queue.isEmpty()) "UP NEXT" else "UP NEXT Â· ${queue.size}" + queue.sumOf { it.track.durationMs }.let { if (it > 0) " Â· " + formatTotal(it).uppercase() else "" },
-                            color = Fidelis.inkMute, style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.weight(1f))
-                        if (queue.size > 1) FidelisChip("Shuffle", false, vm::reshuffle)
-                        if (queue.isNotEmpty()) { Spacer(Modifier.width(8.dp)); FidelisChip("Clear", false, vm::clear) }
-                    }
-                }
-                if (queue.isEmpty()) {
-                    item {
-                    Text(if (contextMode) "Spotify picks what plays next${spotifyCtx?.let { " from $it" } ?: ""}. Anything you add plays first, then it carries on."
-                        else "Nothing queued. Use â® âº Play next or Add to queue on any song.",
-                            color = Fidelis.inkFaint, style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-                    }
-                }
-            itemsIndexed(queue, key = { _, it -> it.id }) { qi, e ->
-                // Spotify-style sections: your own picks first, then where the rest comes from.
-                if (qi == 0 || queue[qi - 1].manual != e.manual) QueueHeader(
-                    when {
-                        e.manual -> "Next in queue"
-                        queueFrom != null -> "Next from: $queueFrom"
-                        contextMode && spotifyCtx != null -> "Next from: $spotifyCtx"
-                        else -> "Next up"
-                    },
-                )
-                    val dragging = draggingId == e.id
-                    QueueRow(
-                        e = e, dragging = dragging,
-                        modifier = Modifier.zIndex(if (dragging) 1f else 0f)
-                            .graphicsLayer { translationY = if (dragging) dragOffset else 0f },
-                        onClick = { vm.playAt(vm.indexOf(e.id)) },
-                        onMore = { sheetEntry = e },
-                        handle = Modifier.pointerInput(e.id) {
-                            detectDragGestures(
-                                onDragStart = { draggingId = e.id; dragOffset = 0f },
-                                onDragEnd = { draggingId = null; dragOffset = 0f },
-                                onDragCancel = { draggingId = null; dragOffset = 0f },
-                                onDrag = { change, amount ->
-                                    change.consume()
-                                    dragOffset += amount.y
-                                    val i = vm.indexOf(e.id)
-                                    if (dragOffset > rowPx / 2 && i < vm.queue.value.lastIndex) {
-                                        vm.move(i, i + 1); dragOffset -= rowPx
-                                    } else if (dragOffset < -rowPx / 2 && i > 0) {
-                                        vm.move(i, i - 1); dragOffset += rowPx
-                                    }
-                                },
-                            )
-                        },
-                    )
-                }
-            if (contextMode && queue.isNotEmpty()) item { QueueHeader("Then Spotify carries on${spotifyCtx?.let { " with $it" } ?: ""}") }
-                if (history.isNotEmpty()) {
-                    item { SectionLabel("Recently played", Modifier.padding(horizontal = 24.dp)) }
-                    items(history.asReversed(), key = { "h-${it.uri}" }) { t ->
-                        TrackRow(title = t.title, subtitle = t.artist, imageUrl = t.imageUrl,
-                            onClick = { vm.playNow(t) })
-                    }
-                }
-                item { Spacer(Modifier.navigationBarsPadding().height(32.dp)) }
             }
         }
 
@@ -302,6 +240,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
         }
     }
 
+    if (queueOpen) QueueSheet(vm, art, wash, onMore = { sheetEntry = it }, onDismiss = { queueOpen = false })
     sheetEntry?.let { e ->
         TrackSheet(
             uri = e.track.uri, title = e.track.title, subtitle = e.track.artist, imageUrl = e.track.imageUrl,
@@ -345,9 +284,9 @@ private fun LyricsView(
                 }
             }
             when (lyrics) {
-                Lyrics.Loading -> LyricsNote("Finding lyricsâ¦")
+                Lyrics.Loading -> LyricsNote("Finding lyrics…")
                 Lyrics.None -> LyricsNote("No lyrics for this song yet.")
-                Lyrics.Instrumental -> LyricsNote("âª  Instrumental")
+                Lyrics.Instrumental -> LyricsNote("♪  Instrumental")
                 is Lyrics.Plain -> PlainLyrics(lyrics.lines)
                 is Lyrics.Synced -> SyncedLyrics(lyrics.lines, live, offsetMs, onSeek)
             }
@@ -410,7 +349,7 @@ private fun ColumnScope.SyncedLyrics(lines: List<LyricLine>, live: () -> Long, o
                 val mod = Modifier.fillMaxWidth().pressable { onSeek((line.timeMs - shift).coerceAtLeast(0)) }
                     .padding(horizontal = 28.dp, vertical = 10.dp)
                 if (active && line.words.isNotEmpty()) SungWords(line, { now.longValue + shift }, style, mod)
-                else Text(line.text.ifBlank { "âª" }, color = Color.White.copy(alpha = alpha), textAlign = TextAlign.Center,
+                else Text(line.text.ifBlank { "♪" }, color = Color.White.copy(alpha = alpha), textAlign = TextAlign.Center,
                     style = style, modifier = mod)
             }
         }
@@ -444,11 +383,11 @@ private fun LyricsFooter(lyrics: Lyrics, offsetMs: Long, onNudge: (Long) -> Unit
         Column(Modifier.weight(1f).then(if (choices > 1) Modifier.pressable(onClick = onSwitch) else Modifier).padding(8.dp)) {
             if (source.isNotBlank()) Text("Lyrics from $source", color = Fidelis.inkMute, style = MaterialTheme.typography.labelMedium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (choices > 1) Text("Tap to try another source Â· $choices found", color = Fidelis.inkFaint,
+            if (choices > 1) Text("Tap to try another source · $choices found", color = Fidelis.inkFaint,
                 style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (lyrics is Lyrics.Synced) {
-            Nudge("â", "Show lyrics later") { onNudge(-250) }
+            Nudge("−", "Show lyrics later") { onNudge(-250) }
             Text(
                 when {
                     offsetMs > 0 -> "%.2fs early".format(offsetMs / 1000f)
@@ -492,7 +431,7 @@ private fun QueueRow(
         Column(Modifier.weight(1f)) {
             Text(e.track.title, color = Fidelis.ink, style = MaterialTheme.typography.titleSmall,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(if (e.added) "✦ Suggested · ${e.track.artist}" else e.track.artist, color = if (e.added) Fidelis.violet else Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
+            Text(if (e.added) "\u2726 Suggested \u00B7 ${e.track.artist}" else e.track.artist, color = if (e.added) Fidelis.violet else Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (e.track.durationMs > 0) {
