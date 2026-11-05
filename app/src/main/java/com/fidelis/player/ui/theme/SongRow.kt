@@ -1,5 +1,6 @@
 package com.fidelis.player.ui.theme
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,7 +41,10 @@ fun SongRow(
                 style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(28.dp))
         }
         Box(Modifier.size(46.dp).clip(RoundedCornerShape(10.dp)).background(Fidelis.glass)) {
-            imageUrl?.let { AsyncImage(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+            // Songs without a cover get the vinyl one.
+            val vinyl = rememberVinyl()
+            if (imageUrl.isNullOrBlank()) Image(vinyl, null, Modifier.fillMaxSize())
+            else AsyncImage(imageUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, error = vinyl, fallback = vinyl)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

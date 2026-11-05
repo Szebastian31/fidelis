@@ -347,7 +347,8 @@ fun MiniPlayerPill(
     ) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(48.dp).clip(RoundedCornerShape(18.dp)).background(Fidelis.glass)) {
-                art?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+                if (art != null) Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else rememberVinyl(snap.title, snap.artist)?.let { Image(it, null, Modifier.fillMaxSize()) }
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {

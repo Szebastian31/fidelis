@@ -5,6 +5,11 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 2.3.1
+
+- **Plain vinyl cover.** The record for songs without art no longer has the song name on its label.
+- **Vinyl in lists and the mini player.** Songs without a cover show the vinyl in every song list and in the mini player, instead of an empty square.
+
 ## 2.3.0
 
 - **Playlist search.** Search now finds playlists from Spotify and anyone else. Tap one to play it, or use the menu to pin it to Your playlists, see the owner's profile in Spotify, or open it in Spotify. Other people's playlists play whole inside Spotify, because Spotify only lets apps list the songs of your own.
