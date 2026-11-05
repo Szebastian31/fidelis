@@ -78,6 +78,8 @@ import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.spotifyImageUrl
 import com.fidelis.player.ui.theme.Fidelis
 import com.fidelis.player.ui.theme.IconCircle
+import com.fidelis.player.ui.theme.MarqueeText
+import com.fidelis.player.ui.theme.rememberVinyl
 import com.fidelis.player.ui.theme.pressable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -186,6 +188,7 @@ internal fun Hero(
 
     var compact by remember { mutableStateOf(false) }
     val shown = flying ?: current
+    val shownVinyl = rememberVinyl(shown.title, shown.artist)
     LaunchedEffect(compact) { if (compact) { delay(5_000); compact = false } }
     LaunchedEffect(shown.uri) { compact = false }
     val t by animateFloatAsState(if (compact) 1f else 0f, tween(420, easing = FastOutSlowInEasing), label = "compact")
@@ -226,7 +229,7 @@ internal fun Hero(
         )))
 
         // Tapped: the whole cover as a card.
-        if (t > 0f && shown.image != null) {
+        if (t > 0f && (shown.image != null || shownVinyl != null)) {
             Box(Modifier.fillMaxWidth().fillMaxHeight(0.62f).statusBarsPadding().padding(top = 64.dp),
                 contentAlignment = Alignment.Center) {
                 AsyncImage(shown.image, "Album artwork",
@@ -234,7 +237,7 @@ internal fun Hero(
                         .graphicsLayer { alpha = t; scaleX = 0.9f + 0.1f * t; scaleY = 0.9f + 0.1f * t }
                         .shadow(28.dp, RoundedCornerShape(20.dp), ambientColor = wash, spotColor = wash)
                         .clip(RoundedCornerShape(20.dp)),
-                    contentScale = ContentScale.Crop)
+                    contentScale = ContentScale.Crop, error = shownVinyl, fallback = shownVinyl)
             }
         }
 
@@ -298,14 +301,11 @@ internal fun Hero(
                     label = "title",
                 ) { (title, artist) ->
                     Column {
-                        Text(title.ifBlank { " " }, color = Color.White,
-                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp),
-                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        MarqueeText(title.ifBlank { " " }, Color.White, MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp), Modifier.fillMaxWidth())
                         Spacer(Modifier.height(2.dp))
                         if (artist.isNotBlank()) {
                             Row(Modifier.pressable(onClick = onArtist), verticalAlignment = Alignment.CenterVertically) {
-                                Text(artist, color = Fidelis.inkSoft, style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                MarqueeText(artist, Fidelis.inkSoft, MaterialTheme.typography.titleMedium, Modifier.weight(1f, fill = false))
                                 Icon(Icons.Rounded.ChevronRight, "Go to $artist", tint = Fidelis.inkMute,
                                     modifier = Modifier.size(20.dp))
                             }
@@ -374,6 +374,7 @@ internal fun Hero(
 private fun CoverPage(page: Page, slot: Float, x: () -> Float, width: Float, tint: ColorFilter) {
     val context = LocalContext.current
     val request = remember(page.image) { ImageRequest.Builder(context).data(page.image).crossfade(320).build() }
+    val vinyl = rememberVinyl(page.title, page.artist)
     AsyncImage(
         request, null,
         Modifier.fillMaxSize().graphicsLayer {
@@ -386,6 +387,7 @@ private fun CoverPage(page: Page, slot: Float, x: () -> Float, width: Float, tin
         },
         contentScale = ContentScale.Crop,
         colorFilter = tint,
+        error = vinyl, fallback = vinyl,
     )
 }
 

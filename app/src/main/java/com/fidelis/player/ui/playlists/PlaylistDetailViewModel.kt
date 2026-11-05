@@ -20,6 +20,7 @@ import javax.inject.Inject
 class PlaylistDetailViewModel @Inject constructor(
     private val repo: SpotifyRepository,
     private val remote: SpotifyRemote,
+    private val smart: com.fidelis.player.integration.spotify.SmartShuffle,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private val playlistId: String = savedStateHandle["playlistId"] ?: ""
@@ -44,7 +45,9 @@ class PlaylistDetailViewModel @Inject constructor(
     }
 
     fun playFrom(index: Int) = remote.playQueue(tracks.map { it.toQueue() }, index, from = playlist?.name)
-    fun shuffle() { if (tracks.isNotEmpty()) remote.playQueue(tracks.freshShuffle { it.artist }.map { it.toQueue() }, 0, from = playlist?.name) }
+    fun shuffle() = smart.play(tracks.map { it.toQueue() }, playlist?.name)
+    val smartOn = smart.on
+    fun toggleSmart() = smart.set(!smart.on.value)
 
     fun playNext(t: PlaylistTrack) = remote.playNext(listOf(t.toQueue()))
     fun addToQueue(t: PlaylistTrack) = remote.addToQueue(listOf(t.toQueue()))

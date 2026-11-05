@@ -226,7 +226,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                 item {
                     Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 20.dp, top = 20.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (queue.isEmpty()) "UP NEXT" else "UP NEXT · ${queue.size}" + queue.sumOf { it.track.durationMs }.let { if (it > 0) " · " + formatTotal(it).uppercase() else "" },
+                        Text(if (queue.isEmpty()) "UP NEXT" else "UP NEXT Â· ${queue.size}" + queue.sumOf { it.track.durationMs }.let { if (it > 0) " Â· " + formatTotal(it).uppercase() else "" },
                             color = Fidelis.inkMute, style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.weight(1f))
                         if (queue.size > 1) FidelisChip("Shuffle", false, vm::reshuffle)
@@ -236,7 +236,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                 if (queue.isEmpty()) {
                     item {
                     Text(if (contextMode) "Spotify picks what plays next${spotifyCtx?.let { " from $it" } ?: ""}. Anything you add plays first, then it carries on."
-                        else "Nothing queued. Use ⋮ › Play next or Add to queue on any song.",
+                        else "Nothing queued. Use â® âº Play next or Add to queue on any song.",
                             color = Fidelis.inkFaint, style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
                     }
@@ -345,9 +345,9 @@ private fun LyricsView(
                 }
             }
             when (lyrics) {
-                Lyrics.Loading -> LyricsNote("Finding lyrics…")
+                Lyrics.Loading -> LyricsNote("Finding lyricsâ¦")
                 Lyrics.None -> LyricsNote("No lyrics for this song yet.")
-                Lyrics.Instrumental -> LyricsNote("♪  Instrumental")
+                Lyrics.Instrumental -> LyricsNote("âª  Instrumental")
                 is Lyrics.Plain -> PlainLyrics(lyrics.lines)
                 is Lyrics.Synced -> SyncedLyrics(lyrics.lines, live, offsetMs, onSeek)
             }
@@ -410,7 +410,7 @@ private fun ColumnScope.SyncedLyrics(lines: List<LyricLine>, live: () -> Long, o
                 val mod = Modifier.fillMaxWidth().pressable { onSeek((line.timeMs - shift).coerceAtLeast(0)) }
                     .padding(horizontal = 28.dp, vertical = 10.dp)
                 if (active && line.words.isNotEmpty()) SungWords(line, { now.longValue + shift }, style, mod)
-                else Text(line.text.ifBlank { "♪" }, color = Color.White.copy(alpha = alpha), textAlign = TextAlign.Center,
+                else Text(line.text.ifBlank { "âª" }, color = Color.White.copy(alpha = alpha), textAlign = TextAlign.Center,
                     style = style, modifier = mod)
             }
         }
@@ -444,11 +444,11 @@ private fun LyricsFooter(lyrics: Lyrics, offsetMs: Long, onNudge: (Long) -> Unit
         Column(Modifier.weight(1f).then(if (choices > 1) Modifier.pressable(onClick = onSwitch) else Modifier).padding(8.dp)) {
             if (source.isNotBlank()) Text("Lyrics from $source", color = Fidelis.inkMute, style = MaterialTheme.typography.labelMedium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (choices > 1) Text("Tap to try another source · $choices found", color = Fidelis.inkFaint,
+            if (choices > 1) Text("Tap to try another source Â· $choices found", color = Fidelis.inkFaint,
                 style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (lyrics is Lyrics.Synced) {
-            Nudge("−", "Show lyrics later") { onNudge(-250) }
+            Nudge("â", "Show lyrics later") { onNudge(-250) }
             Text(
                 when {
                     offsetMs > 0 -> "%.2fs early".format(offsetMs / 1000f)
@@ -484,13 +484,15 @@ private fun QueueRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(Fidelis.glass)) {
-            e.track.imageUrl?.let { AsyncImage(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+            rememberVinyl(e.track.title, e.track.artist).let { vinyl ->
+            AsyncImage(e.track.imageUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, error = vinyl, fallback = vinyl)
+        }
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(e.track.title, color = Fidelis.ink, style = MaterialTheme.typography.titleSmall,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(e.track.artist, color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
+            Text(if (e.added) "✦ Suggested · ${e.track.artist}" else e.track.artist, color = if (e.added) Fidelis.violet else Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (e.track.durationMs > 0) {

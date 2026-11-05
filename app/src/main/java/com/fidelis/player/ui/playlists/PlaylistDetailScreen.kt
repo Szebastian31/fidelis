@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded. AutoAwesome
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Radio
@@ -73,6 +74,12 @@ fun PlaylistDetailScreen(
                     if (tracks.isNotEmpty()) {
                         IconCircle(Icons.Rounded.Shuffle, "Shuffle", size = 52.dp,
                             onClick = { vm.shuffle(); onOpenPlayer() })
+                    val smartOn by vm.smartOn.collectAsState()
+                    IconCircle(Icons.Rounded.AutoAwesome, if (smartOn) "Smart shuffle on" else "Smart shuffle off", size = 52.dp, filled = smartOn,
+                        onClick = {
+                            vm.toggleSmart()
+                            toast(if (smartOn) "Smart shuffle off: only this playlist's songs" else "Smart shuffle on: adds songs that fit this playlist")
+                        })
                         actions?.let { a ->
                             IconCircle(Icons.Rounded.Radio, "Play similar songs", size = 52.dp,
                                 onClick = { a.similarTo(tracks, label) })

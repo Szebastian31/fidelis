@@ -3,6 +3,12 @@
 What changed in each version of Fidelis, newest first.
 
 
+
+## 2.1.0
+
+- **Vinyl cover for songs without art.** A record with a blank label and the song's name on it, on Now Playing and in Up next.
+- **Scrolling titles.** On Now Playing, a title or artist that doesn't fit scrolls and loops, like Spotify.
+- **Smart shuffle.** The new button by Shuffle on playlist pages adds songs that fit the playlist, about one after every three of yours, marked as suggested in Up next.
 ## 2.0.1
 
 - **Sharp covers.** Now Playing asks Spotify for the largest cover, and every Spotify or Apple Podcasts thumbnail link is swapped for its full-size version.

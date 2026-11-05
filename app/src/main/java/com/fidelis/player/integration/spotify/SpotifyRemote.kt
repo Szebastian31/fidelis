@@ -27,7 +27,7 @@ import javax.inject.Singleton
 data class QueueTrack(val uri: String, val title: String, val artist: String, val imageUrl: String? = null, val durationMs: Long = 0L)
 
 /** One slot in Up next. [id] stays stable while the slot is moved around. */
-data class QueueEntry(val id: Long, val track: QueueTrack, val manual: Boolean = false)
+data class QueueEntry(val id: Long, val track: QueueTrack, val manual: Boolean = false, val added: Boolean = false)
 
 /**
  * Bridge to the Spotify app plus Fidelis's own queue.
@@ -331,6 +331,28 @@ class SpotifyRemote @Inject constructor() {
         _queue.value = mine + rest.freshShuffle { it.track.artist }
         upNextChanged()
     }
+
+    /** Smart shuffle: suggested songs spread through the rest of Up next, one after every few of yours. */
+    fun blendIn(extra: List<QueueTrack>, every: Int = 3) {
+        if (extra.isEmpty()) return
+        val (mine, rest) = _queue.value.partition { it.manual }
+        val out = ArrayList<QueueEntry>(rest.size + extra.size)
+        var j = 0
+        rest.forEachIndexed { i, e ->
+            out += e
+            if ((i + 1) % every == 0 && j < extra.size) out += entry(extra[j++]).copy(added = true)
+        }
+        _queue.value = mine + out
+        upNextChanged()
+    }
+
+    /** Takes smart shuffle's suggestions back out of Up next. */
+    fun unblend() {
+        if (_queue.value.none { it.added }) return
+        _queue.value = _queue.value.filterNot { it.added }
+        upNextChanged()
+    }
+
 
     /** Plays a whole Spotify context (e.g. a playlist Fidelis can't list). Clears Up next. */
     fun playContext(uri: String) {

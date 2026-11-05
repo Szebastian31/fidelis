@@ -26,6 +26,7 @@ import javax.inject.Inject
 class SpotifyPageViewModel @Inject constructor(
     saved: SavedStateHandle,
     private val remote: SpotifyRemote,
+    private val smart: com.fidelis.player.integration.spotify.SmartShuffle,
     private val repo: SpotifyRepository,
     private val home: SpotifyHome,
     private val pins: PlaylistPins,
@@ -62,7 +63,7 @@ class SpotifyPageViewModel @Inject constructor(
     }
 
     fun playFrom(i: Int) = remote.playQueue(tracks, i, from = source?.title)
-    fun shuffle() = remote.playQueue(tracks.freshShuffle { it.artist }, 0, from = source?.title)
+    fun shuffle() = smart.play(tracks, source?.title)
     fun playInSpotify() { source?.let(remote::playItem) }
     fun playNext(t: QueueTrack) = remote.playNext(listOf(t))
     fun addToQueue(t: QueueTrack) = remote.addToQueue(listOf(t))
