@@ -24,6 +24,7 @@ import com.fidelis.player.annales.follow
 import com.fidelis.player.R
 import com.fidelis.player.integration.spotify.QueueEntry
 import com.fidelis.player.integration.spotify.SpotifyRemote
+import com.fidelis.player.integration.spotify.forSystem
 import com.fidelis.player.ui.theme.Fidelis
 import com.fidelis.player.widget.HomeWidget
 import dagger.hilt.android.AndroidEntryPoint
@@ -54,9 +55,13 @@ class PlaybackService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var session: MediaSessionCompat
     private var sharedQueue: List<QueueEntry>? = null
+    private var lastNote: List<Any?>? = null
+    private var smallFor: Bitmap? = null
+    private var smallArt: Bitmap? = null
 
     override fun onCreate() {
         super.onCreate()
+        running = true
         createChannel()
         scope.launch { ListeningLog.get(this@PlaybackService).follow(remote) } // what you listen to, for Annales
         session = MediaSessionCompat(this, "Fidelis").apply {
@@ -83,11 +88,12 @@ class PlaybackService : Service() {
         }
         // Keep the session + notification in step with the bridge.
         scope.launch {
-            combine(remote.state, remote.artwork, remote.liked, remote.queue) { s, a, l, q -> Frame(s, a, l, q) }
+            combine(remote.state, remote.artwork, remote.liked, remote.queue) { s, a, l, q -> Frame(s, small(a), l, q) }
                 .collect { f ->
                     updateSession(f)
                     HomeWidget.spotify(this@PlaybackService, f.snap?.title, f.snap?.artist, f.art, f.snap?.isPaused == false)
-                    startForegroundCompat(buildNotification(f))
+                    val note = listOf(f.snap?.uri, f.snap?.title, f.snap?.isPaused, f.liked, f.art, Fidelis.purple)
+                    if (note != lastNote) { lastNote = note; startForegroundCompat(buildNotification(f)) }
                 }
         }
     }
@@ -105,8 +111,16 @@ class PlaybackService : Service() {
         return START_STICKY
     }
 
+    /** The system gets a smaller copy of the cover; a big one can be too large to hand over and crash the app. */
+    private fun small(b: Bitmap?): Bitmap? {
+        if (b == null) return null
+        if (b === smallFor) return smallArt
+        smallArt = runCatching { b.forSystem() }.getOrNull(); smallFor = b
+        return smallArt
+    }
+
     private fun currentFrame() =
-        Frame(remote.state.value, remote.artwork.value, remote.liked.value, remote.queue.value)
+        Frame(remote.state.value, small(remote.artwork.value), remote.liked.value, remote.queue.value)
 
     private fun updateSession(f: Frame) {
         // An active session with no song shows up as a blank card in ColorOS. Stay quiet until there's one.
@@ -213,11 +227,13 @@ class PlaybackService : Service() {
     )
 
     private fun startForegroundCompat(notification: Notification) {
+        try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
         } else {
             startForeground(NOTIF_ID, notification)
         }
+        } catch (e: Exception) { android.util.Log.w("Fidelis", "Couldn't show the playback notification", e) }
     }
 
     private fun createChannel() {
@@ -231,6 +247,7 @@ class PlaybackService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        running = false
         scope.cancel()
         session.isActive = false
         session.release()
@@ -238,6 +255,8 @@ class PlaybackService : Service() {
     }
 
     companion object {
+        /** Whether the service is up, so it isn't started again from the background. */
+        @Volatile var running = false
         private const val CHANNEL_ID = "fidelis_playback"
         private const val NOTIF_ID = 1001
         private const val MAX_SHARED = 100

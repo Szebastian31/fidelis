@@ -48,8 +48,12 @@ class PodcastRepository @Inject constructor(private val repo: SpotifyRepository)
     }
 }
 
-private fun JSONObject.bestImage(): String? =
-    optJSONArray("images")?.takeIf { it.length() > 0 }?.optJSONObject(0)?.optString("url")?.ifBlank { null }
+/** The widest image Spotify lists, rather than whichever comes first. */
+private fun JSONObject.bestImage(): String? {
+    val a = optJSONArray("images") ?: return null
+    return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.maxByOrNull { it.optInt("width", 0) }
+        ?.optString("url")?.ifBlank { null }
+}
 
 private fun JSONObject.toShow(): PodcastShow? {
     val id = optString("id").ifBlank { return null }

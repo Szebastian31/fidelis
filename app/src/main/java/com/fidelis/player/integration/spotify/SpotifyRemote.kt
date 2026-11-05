@@ -135,7 +135,9 @@ class SpotifyRemote @Inject constructor() {
         lastStateAt = SystemClock.elapsedRealtime()
         if (t?.imageUri != null && t.imageUri.raw != lastArtUri) {
             lastArtUri = t.imageUri.raw
-            remote.imagesApi.getImage(t.imageUri).setResultCallback { bmp -> _artwork.value = bmp }
+            val want = t.imageUri.raw
+            remote.imagesApi.getImage(t.imageUri, com.spotify.protocol.types. Image.Dimension.LARGE)
+                .setResultCallback { bmp -> if (lastArtUri == want) _artwork.value = bmp }
         }
         if (t?.uri != null && t.uri != likedUri) refreshLiked(t.uri, remote)
         if (snap.uri != null) reconcile(snap)
@@ -447,7 +449,12 @@ class SpotifyRemote @Inject constructor() {
 
     private fun ensureService() {
         val ctx = appContext ?: return
-        ContextCompat.startForegroundService(ctx, Intent(ctx, PlaybackService::class.java))
+        if (PlaybackService.running) return
+        try {
+            ContextCompat.startForegroundService(ctx, Intent(ctx, PlaybackService::class.java))
+        } catch (e: Exception) {
+            Log.w("FidelisBridge", "Couldn't start the playback service", e)
+        }
     }
 
     fun disconnect() {

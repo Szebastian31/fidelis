@@ -2,6 +2,11 @@
 
 What changed in each version of Fidelis, newest first.
 
+
+## 2.0.1
+
+- **Sharp covers.** Now Playing asks Spotify for the largest cover, and every Spotify or Apple Podcasts thumbnail link is swapped for its full-size version.
+- **Fewer crashes when switching songs.** The system media card gets a smaller copy of the cover, the notification only updates when something visible changes, and the playback service is no longer restarted from the background.
 ## 2.0.0
 
 - **Your own Spotify app.** Spotify only lets an app's listed accounts sign in, so Fidelis now signs in through a Spotify app you make. Profile → **Your Spotify app** walks you through it and shows the redirect URI, package and SHA-1 to copy. Builds with a Client ID built in keep using it until you paste another.
