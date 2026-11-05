@@ -5,6 +5,10 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 2.3.2
+
+- **Vinyl in the mini player, for real.** The swipeable mini player above the tabs now shows the vinyl for songs without a cover.
+
 ## 2.3.1
 
 - **Plain vinyl cover.** The record for songs without art no longer has the song name on its label.

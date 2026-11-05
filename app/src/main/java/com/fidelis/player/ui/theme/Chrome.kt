@@ -103,7 +103,9 @@ fun SwipeMini(
     ) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(46.dp).clip(RoundedCornerShape(16.dp)).background(Fidelis.glass)) {
-                img?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+                // Songs without a cover get the vinyl one.
+                if (img != null) Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else rememberVinyl(snap.title, snap.artist)?.let { Image(it, null, Modifier.fillMaxSize()) }
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
