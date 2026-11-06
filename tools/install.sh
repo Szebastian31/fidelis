@@ -17,7 +17,9 @@ gh run watch "$ID" --exit-status >/dev/null || {
   gh run view "$ID" --log-failed | grep -E 'e: |error:|FAILED' | head -n 40
   exit 1
 }
+# the release for this version (one per versionName in app/build.gradle.kts)
+VERSION=$(grep -m1 versionName app/build.gradle.kts | cut -d\" -f2)
 DIR=$(mktemp -d)
-gh release download latest-debug --pattern fidelis-debug.apk --dir "$DIR" --clobber
-adb install -r "$DIR/fidelis-debug.apk"
-echo "Installed build ${SHA:0:7}."
+gh release download "v${VERSION}" --pattern "Fidelis_v${VERSION}.apk" --dir "$DIR" --clobber
+adb install -r "$DIR/Fidelis_v${VERSION}.apk"
+echo "Installed Fidelis ${VERSION}, build ${SHA:0:7}."

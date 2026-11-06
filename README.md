@@ -50,7 +50,7 @@ https://buycoffee.to/szebastian
 
 You need the **Spotify app**, installed and signed in on the same phone. You need **Spotify Premium**: since February 2026 a Spotify app like the one Fidelis signs in through only works while its owner has Premium.
 
-1. Open **[Releases](../../releases)** on your phone and download **fidelis-debug.apk** from **Latest debug build**.
+1. Open **[Releases](../../releases)** on your phone and download **Fidelis_v….apk** from the latest release.
 2. Open the file. If Android asks, allow your browser to **install unknown apps**.
 3. Open Fidelis and allow **notifications**, so the lock-screen controls and Fluid Cloud work.
 4. **Make your own Spotify app.** Spotify only lets an app's own listed accounts sign in, so Fidelis signs in through one of yours. In **Profile → Your Spotify app**, follow the four steps (it's free and takes two minutes; Fidelis shows the values to copy) and paste its **Client ID**.
@@ -78,7 +78,7 @@ _Fidelis is Latin for faithful. Its root, fidēs, was also the Roman word for th
 <details>
 <summary>For developers</summary>
 
-A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines, Coil, OkHttp). It plays through the Spotify app with the Spotify App Remote SDK and reads your library through the Spotify Web API (PKCE sign-in). GitHub Actions builds a debug APK on every push to `main` and publishes it to the **latest-debug** release.
+A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines, Coil, OkHttp). It plays through the Spotify app with the Spotify App Remote SDK and reads your library through the Spotify Web API (PKCE sign-in). GitHub Actions builds a debug APK on every push to `main` and publishes each version as a release, with its notes from `CHANGELOG.md`.
 
 | Where | What it is |
 | --- | --- |
@@ -90,7 +90,7 @@ A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines
 | `ui/` | Screens; `ui/theme/` holds the looks, the Manrope type and shared components |
 | `tools/install.sh` | Waits for the build of your last push and installs it on the plugged-in phone |
 | `tools/screenshots.sh`, `tools/banner.html` | Make everything in `screenshots/` from the phone |
-| `.github/workflows/android.yml` | Builds the APK and publishes it to the latest-debug release |
+| `.github/workflows/android.yml` | Builds the APK and publishes each version as a release |
 
 **Keys.** Put `LASTFM_API_KEY` and `LASTFM_SECRET` in `local.properties` (git-ignored) for local builds, and as repository secrets for GitHub Actions. Never commit them. `SPOTIFY_CLIENT_ID` is optional: a build with one uses it until someone pastes their own in Profile, and a build without one asks for it there (`SpotifyKey` decides which is used).
 
