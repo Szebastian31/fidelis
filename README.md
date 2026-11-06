@@ -59,6 +59,8 @@ You need the **Spotify app**, installed and signed in on the same phone. You nee
 
 Updating: install the new APK over the old one. Your sign-ins and mixes stay.
 
+**Or get updates automatically with Obtainium:** [Add Fidelis to Obtainium](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.fidelis.player%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FSzebastian31%2Ffidelis%22%2C%22author%22%3A%22Szebastian31%22%2C%22name%22%3A%22Fidelis%22%7D)
+
 ## What it can't do
 
 Spotify limits what apps like Fidelis can see. Fidelis can only list the songs of playlists you created or collaborate on (others still play in full through Spotify), search returns at most 10 results per type at a time, and artist songs are ranked by Last.fm because Spotify no longer shares its own top songs.
