@@ -5,6 +5,13 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 2.6.0
+
+- **Podcasts for you opens instantly.** Your shows, new episodes and suggestions are kept on the phone and show straight away, then update in the background. Episodes and suggestions load side by side, and charts are kept for a few hours.
+- **Clearer podcast groups.** Your own taste comes first, with up to three Your vibe genres, then the charts. New episodes puts ones you've started first and finished ones last.
+- **Faster Listen screen.** Quick picks, Listen again and Heavy rotation each appear as soon as they're ready.
+- **Smoother scrolling.** Covers in lists load at the size they're shown instead of full size, and stay cached on the phone.
+
 ## 2.5.0
 
 - **Drag the mini player up** into the full player. It follows your finger and opens on a soft spring; a flick works too.

@@ -3,6 +3,7 @@ package com.fidelis.player.integration.spotify
 import android.graphics.Bitmap
 import coil.map.Mapper
 import coil.request.Options
+import coil.size.Dimension
 
 /** Spotify's image ids start with a size code. Small ones are swapped for the 640 px version. */
 private val SPOTIFY_SIZES = listOf(
@@ -21,9 +22,29 @@ fun spotifyHiRes(url: String): String = when {
     else -> url
 }
 
-/** Used for every image Fidelis loads, so a thumbnail link never shows up blurry. */
+/** ~300 px versions: plenty for list rows and tiles, and far lighter to load while scrolling. */
+private val SPOTIFY_MID = listOf(
+    "ab67616d00004851" to "ab67616d00001e02", "ab67616d0000b273" to "ab67616d00001e02", // albums
+    "ab6761610000f178" to "ab67616100005174", "ab6761610000e5eb" to "ab67616100005174", // artists
+)
+
+/** A cover link sized for a small spot on screen: tiny thumbnails go up to ~300 px, full-size ones come down. */
+fun spotifyMid(url: String): String = when {
+    "i.scdn.co/image/" in url -> SPOTIFY_MID.fold(url) { u, (from, mid) -> u.replace("/image/$from", "/image/$mid") }
+    "mosaic.scdn.co/" in url -> url.replace(MOSAIC, "mosaic.scdn.co/300/")
+    "mzstatic.com" in url -> url.replace(APPLE, "/300x300bb.jpg")
+    else -> url
+}
+
+private const val SMALL_PX = 360
+
+/** Used for every image Fidelis loads: sharp on big covers, light in lists, so scrolling stays smooth. */
 object SpotifyHiRes : Mapper<String, String> {
-    override fun map(data: String, options: Options): String? = spotifyHiRes(data).takeIf { it != data }
+    override fun map(data: String, options: Options): String? {
+        val w = (options.size.width as? Dimension.Pixels)?.px ?: Int.MAX_VALUE
+        val out = if (w <= SMALL_PX) spotifyMid(data) else spotifyHiRes(data)
+        return out.takeIf { it != data }
+    }
 }
 
 /** A smaller copy for the system's media card and notification. Big covers can be too large to hand over. */

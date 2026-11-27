@@ -20,6 +20,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -45,15 +46,25 @@ class PodcastsViewModel @Inject constructor(
     /** Your shows by name, to mark them as followed and keep them out of suggestions. */
     val followed: Set<String> get() = shows.map { podKey(it.name) }.toSet()
 
-    init { refresh() }
+    init {
+        // Show what was found last time straight away, then bring it up to date in the background.
+        discover.cachedPicks()?.let { vibe = it.vibe; rows = it.rows }
+        latest = pods.cachedNewEpisodes()
+        if (shows.isNotEmpty()) loading = false
+        refresh()
+    }
 
-    fun refresh() {
+    fun refresh(force: Boolean = false) {
         viewModelScope.launch {
-            loading = true
+            if (shows.isEmpty()) loading = true
             shows = pods.shows()
-            latest = pods.newEpisodes(shows)
+            // New episodes and suggestions load side by side; suggestions only when they're out of date.
+            val eps = async { pods.newEpisodes(shows) }
+            if (force || rows.isEmpty() || !discover.picksFresh()) launch {
+                runCatching { discover.forYou(shows, favourite()) }.getOrNull()?.let { vibe = it.vibe; rows = it.rows }
+            }
+            latest = eps.await()
             loading = false
-            runCatching { discover.forYou(shows, favourite()) }.getOrNull()?.let { vibe = it.vibe; rows = it.rows }
         }
     }
 

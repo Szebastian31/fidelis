@@ -45,6 +45,51 @@ class PodcastDiscovery @Inject constructor(
 ) {
     private val prefs = context.getSharedPreferences("podcast_genres2", Context.MODE_PRIVATE)
     private val resolved = ConcurrentHashMap<String, String>()
+    private val picksPrefs = context.getSharedPreferences("podcast_picks", Context.MODE_PRIVATE)
+    @Volatile private var lastPicks: PodcastPicks? = null
+    @Volatile private var lastAt = 0L
+    private val charts = ConcurrentHashMap<String, Pair<Long, String>>()
+
+    /** The last suggestions, straight away: from this session, or saved on the phone from the last one. */
+    fun cachedPicks(): PodcastPicks? = lastPicks ?: readPicks()?.also { lastPicks = it }
+
+    /** True when the suggestions are recent enough not to work them out again. */
+    fun picksFresh(): Boolean = System.currentTimeMillis() - lastAt < PICKS_TTL
+
+    /** Charts change slowly, so each is fetched at most every few hours. */
+    private fun cachedGet(url: String): String? {
+        charts[url]?.let { (at, body) -> if (System.currentTimeMillis() - at < CHART_TTL) return body }
+        return get(url)?.also { charts[url] = System.currentTimeMillis() to it }
+    }
+
+    private fun savePicks(p: PodcastPicks) {
+        if (p.rows.isEmpty()) return // a failed refresh keeps the old ones
+        lastPicks = p; lastAt = System.currentTimeMillis()
+        val rows = JSONArray()
+        p.rows.forEach { r ->
+            val shows = JSONArray()
+            r.shows.forEach { s ->
+                shows.put(JSONObject().put("k", s.key).put("n", s.name).put("b", s.by).put("i", s.imageUrl ?: "").put("s", s.spotifyId ?: ""))
+            }
+            rows.put(JSONObject().put("k", r.key).put("e", r.eyebrow).put("t", r.title).put("s", shows))
+        }
+        val o = JSONObject().put("vibe", JSONArray(p.vibe)).put("rows", rows)
+        picksPrefs.edit().putString("picks", o.toString()).putLong("at", lastAt).apply()
+    }
+
+    private fun readPicks(): PodcastPicks? = runCatching {
+        val raw = picksPrefs.getString("picks", null) ?: return@runCatching null
+        lastAt = picksPrefs.getLong("at", 0L)
+        val o = JSONObject(raw)
+        val v = o.getJSONArray("vibe"); val rs = o.getJSONArray("rows")
+        PodcastPicks((0 until v.length()).map { v.getString(it) }, (0 until rs.length()).map { i ->
+            val r = rs.getJSONObject(i); val ss = r.getJSONArray("s")
+            PodcastRow(r.getString("k"), r.getString("e"), r.getString("t"), (0 until ss.length()).map { j ->
+                val s = ss.getJSONObject(j)
+                PodcastPick(s.getString("k"), s.getString("n"), s.optString("b"), s.optString("i").ifBlank { null }, s.optString("s").ifBlank { null })
+            })
+        })
+    }.getOrNull()
 
     /** Your country, from the phone's network or SIM, so charts and search match where you are. */
     private val cc: String = run {
@@ -93,7 +138,7 @@ class PodcastDiscovery @Inject constructor(
     /** Apple Podcasts' top shows, overall or in one genre. */
     suspend fun chart(genre: String? = null, country: String = cc, limit: Int = 25): List<PodcastPick> = withContext(Dispatchers.IO) {
         val g = genre?.let { PODCAST_GENRES[it] }?.let { "/genre=$it" }.orEmpty()
-        val body = get("https://itunes.apple.com/$country/rss/toppodcasts/limit=$limit$g/json") ?: return@withContext emptyList()
+        val body = cachedGet("https://itunes.apple.com/$country/rss/toppodcasts/limit=$limit$g/json") ?: return@withContext emptyList()
         val feed = runCatching { JSONObject(body).optJSONObject("feed") }.getOrNull() ?: return@withContext emptyList()
         val entries = feed.optJSONArray("entry") ?: feed.optJSONObject("entry")?.let { JSONArray().put(it) } ?: return@withContext emptyList()
         (0 until entries.length()).mapNotNull { i ->
@@ -143,7 +188,7 @@ class PodcastDiscovery @Inject constructor(
         val fav = favourite ?: shows.firstOrNull()
         val favGenre = fav?.let { f -> t.firstOrNull { it.first.id == f.id }?.second }
         val like = async { favGenre?.let { chart(it, limit = 50) }.orEmpty() }
-        val moods = vibe.filter { it != favGenre }.take(2).map { g -> async { g to chart(g, limit = 50) } }
+        val moods = vibe.filter { it != favGenre }.take(3).map { g -> async { g to chart(g, limit = 50) } }
         val about = async {
             artists.await().take(6).filter { podKey(it).length >= 3 }.map { a ->
                 async { a to apple(a, 15).filter { podKey(it.name).contains(podKey(a)) } }
@@ -159,12 +204,13 @@ class PodcastDiscovery @Inject constructor(
                 rows += PodcastRow("artists", "About the artists you play", hits.take(3).joinToString(", ") { h -> h.first }, it)
             }
         }
-        fresh(home.await()).takeIf { it.isNotEmpty() }?.let { rows += PodcastRow("home", "Charts", "Top in $countryName", it) }
+        // Your own taste first, then what everyone else is listening to.
         moods.awaitAll().forEach { (g, l) ->
             fresh(l).takeIf { it.isNotEmpty() }?.let { rows += PodcastRow("vibe$g", "Your vibe", "More $g", it) }
         }
+        fresh(home.await()).takeIf { it.isNotEmpty() }?.let { rows += PodcastRow("home", "Charts", "Top in $countryName", it) }
         fresh(world.await()).takeIf { it.isNotEmpty() }?.let { rows += PodcastRow("world", "Charts", "Top worldwide", it) }
-        PodcastPicks(vibe, rows)
+        PodcastPicks(vibe, rows).also { savePicks(it) }
     }
 
     /** The Spotify show for a pick, matched by name. Null when Spotify doesn't have it. */
@@ -179,6 +225,9 @@ class PodcastDiscovery @Inject constructor(
         return best?.spotifyId?.also { resolved[p.key] = it }
     }
 }
+
+private const val PICKS_TTL = 30 * 60_000L
+private const val CHART_TTL = 6 * 60 * 60_000L
 
 private fun JSONObject.spotifyPick(): PodcastPick? {
     val id = optString("id").ifBlank { return null }

@@ -53,12 +53,12 @@ class PlaylistsViewModel @Inject constructor(
 
     /** The Podcasts pill: the shows you follow and their newest episodes. Loaded the first time it's opened. */
     var shows by mutableStateOf(podcasts.cachedShows()); private set
-    var newEpisodes by mutableStateOf<List<PodcastEpisode>>(emptyList()); private set
+    var newEpisodes by mutableStateOf(podcasts.cachedNewEpisodes()); private set
     var loadingShows by mutableStateOf(false); private set
     private var showsJob: Job? = null
 
     fun loadShows(force: Boolean = false) {
-        if (showsJob?.isActive == true || (!force && newEpisodes.isNotEmpty())) return
+        if (showsJob?.isActive == true || (!force && showsJob != null)) return
         showsJob = viewModelScope.launch {
             loadingShows = true
             val s = runCatching { podcasts.shows() }.getOrDefault(shows)
@@ -89,15 +89,12 @@ class PlaylistsViewModel @Inject constructor(
         if (loading) return
         viewModelScope.launch {
             loading = true
-            val liked = async { runCatching { repo.fetchLikedCount() }.getOrDefault(likedCount) }
-            val picks = async { runCatching { repo.fetchTopTracks("short_term") }.getOrDefault(emptyList()) }
-            val recent = async { runCatching { repo.fetchRecentlyPlayed() }.getOrDefault(emptyList()) }
-            val artists = async { runCatching { feed.topArtists("medium_term") }.getOrDefault(emptyList()) }
+            // Each row appears as soon as its own answer arrives, instead of all waiting for the slowest.
+            launch { likedCount = runCatching { repo.fetchLikedCount() }.getOrDefault(likedCount) }
+            launch { runCatching { repo.fetchTopTracks("short_term") }.getOrNull()?.let { quickPicks = it.distinctBy { t -> t.uri }.take(20) } }
+            launch { runCatching { repo.fetchRecentlyPlayed() }.getOrNull()?.let { listenAgain = it.distinctBy { t -> t.uri }.take(16) } }
+            launch { runCatching { feed.topArtists("medium_term") }.getOrNull()?.let { heavyRotation = it } }
             playlists = repo.fetchPlaylists()
-            likedCount = liked.await()
-            quickPicks = picks.await().distinctBy { it.uri }.take(20)
-            listenAgain = recent.await().distinctBy { it.uri }.take(16)
-            heavyRotation = artists.await()
             loading = false
         }
     }
