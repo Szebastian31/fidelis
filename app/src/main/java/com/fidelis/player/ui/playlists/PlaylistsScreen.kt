@@ -13,6 +13,12 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.Podcasts
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import com.fidelis.player.integration.spotify.PodcastEpisode
+import com.fidelis.player.integration.spotify.PodcastShow
+import com.fidelis.player.integration.spotify.SpotifyHomeFeed
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
@@ -72,6 +78,7 @@ fun PlaylistsScreen(
     onOpenArtist: (String) -> Unit = {},
     onOpenAlbum: (String) -> Unit = {},
     onOpenSpotify: (ListItem) -> Unit = {},
+    onOpenShow: (String) -> Unit = {},
     vm: PlaylistsViewModel = hiltViewModel(),
 ) {
     val connected by vm.connected.collectAsState()
@@ -85,6 +92,10 @@ fun PlaylistsScreen(
     // "Your playlists" shows just your library; back returns to For you.
     var libraryOnly by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = libraryOnly) { libraryOnly = false }
+    // All, Music or Podcasts, like Spotify's home. Back from Music or Podcasts returns to All.
+    var filter by rememberSaveable { mutableStateOf(ShelfFilter.All) }
+    BackHandler(enabled = !libraryOnly && filter != ShelfFilter.All) { filter = ShelfFilter.All }
+    val keep: (ListItem) -> Boolean = { filter != ShelfFilter.Music || !it.isPodcast() }
     var sheetFor by remember { mutableStateOf<SpotifyPlaylist?>(null) }
     val full: (LazyGridItemSpanScope) -> GridItemSpan = { GridItemSpan(it.maxLineSpan) }
     val play: (ListItem) -> Unit = { vm.playItem(it); onOpenPlayer() }
@@ -96,6 +107,7 @@ fun PlaylistsScreen(
             u.startsWith("spotify:album:") -> onOpenAlbum(id)
             u.startsWith("spotify:artist:") -> onOpenArtist(id)
             u.startsWith("spotify:playlist:") && vm.ownsPlaylist(id) -> onOpenPlaylist(id)
+            u.startsWith("spotify:show:") -> onOpenShow(id)
             u.endsWith(":collection") -> onOpenPlaylist(LIKED_PLAYLIST_ID)
             else -> onOpenSpotify(item)
         }
@@ -107,6 +119,7 @@ fun PlaylistsScreen(
         }
     }
     LaunchedEffect(connected) { if (connected) vm.refresh() }
+    LaunchedEffect(connected, filter) { if (connected && filter == ShelfFilter.Podcasts) vm.loadShows() }
 
     FidelisBackground {
         sheetFor?.let { p ->
@@ -156,8 +169,13 @@ fun PlaylistsScreen(
             }
 
         item(span = full, key = "tabs") {
-            Row(Modifier.padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FidelisChip("For you", !libraryOnly, { libraryOnly = false })
+            Row(
+                Modifier.bleed(EDGE).horizontalScroll(rememberScrollState()).padding(horizontal = EDGE).padding(bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ShelfFilter.entries.forEach { f ->
+                    FidelisChip(f.label, !libraryOnly && filter == f, { libraryOnly = false; filter = f })
+                }
                 FidelisChip("Your playlists", libraryOnly, { libraryOnly = true })
             }
         }
@@ -170,6 +188,56 @@ fun PlaylistsScreen(
             }
             return@LazyVerticalGrid
         }
+        if (filter == ShelfFilter.Podcasts) {
+            if (vm.newEpisodes.isNotEmpty()) {
+                item(span = full, key = "pod-new") {
+                    Column {
+                        RowTitle("New episodes", "From the shows you follow")
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            vm.newEpisodes.take(8).forEachIndexed { i, e ->
+                                NewEpisodeRow(e, e.uri == snap?.uri) { vm.playEpisode(i); onOpenPlayer() }
+                            }
+                        }
+                    }
+                }
+            }
+            val fromSpotify = podcastItems(home)
+            if (fromSpotify.isNotEmpty()) {
+                item(span = full, key = "pod-spotify") {
+                    Column {
+                        RowTitle("Jump back in", "Podcasts from your Spotify home")
+                        LazyRow(Modifier.bleed(EDGE), contentPadding = PaddingValues(horizontal = EDGE),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            itemsIndexed(fromSpotify, key = { i, _ -> "ps-$i" }) { _, item ->
+                                SpotifyTile(item, vm.spotifyHome, 148.dp, onOpen = { open(item) }, onPlay = { play(item) }, onHold = { itemSheet = item })
+                            }
+                        }
+                    }
+                }
+            }
+            item(span = full, key = "pod-shows") {
+                RowTitle("Your shows", if (vm.shows.isEmpty()) null else "${vm.shows.size} followed")
+            }
+            when {
+                vm.loadingShows && vm.shows.isEmpty() -> items(6) {
+                    Column {
+                        SkeletonBox(Modifier.fillMaxWidth().aspectRatio(1f), radius = 16.dp)
+                        Spacer(Modifier.height(8.dp))
+                        SkeletonBox(Modifier.fillMaxWidth(0.7f).height(12.dp), radius = 6.dp)
+                    }
+                }
+                vm.shows.isEmpty() -> item(span = full, key = "pod-empty") {
+                    EmptyState(
+                        title = "No shows yet",
+                        body = "Follow podcasts in the Listen tab or in Spotify and they'll show up here.",
+                        actionLabel = "Refresh", onAction = { vm.loadShows(force = true) },
+                    )
+                }
+                else -> items(vm.shows, key = { "show-${it.id}" }) { s -> FollowedShowTile(s) { onOpenShow(s.id) } }
+            }
+            return@LazyVerticalGrid
+        }
+
         if (mine.isNotEmpty()) {
             item(span = full, key = "mine") {
                 Column {
@@ -191,14 +259,14 @@ fun PlaylistsScreen(
                     LazyRow(Modifier.bleed(EDGE), contentPadding = PaddingValues(horizontal = EDGE),
                         horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         item(key = "dj") { DjCard { vm.playDj(); onOpenPlayer() } }
-                        itemsIndexed(home?.made.orEmpty(), key = { i, _ -> "made-$i" }) { _, item ->
+                        itemsIndexed(home?.made.orEmpty().filter(keep), key = { i, _ -> "made-$i" }) { _, item ->
                             SpotifyTile(item, vm.spotifyHome, 164.dp, onOpen = { open(item) }, onPlay = { play(item) }, onHold = { itemSheet = item })
                         }
                     }
                 }
             }
 
-            home?.recents?.takeIf { it.isNotEmpty() }?.let { recents ->
+            home?.recents?.filter(keep)?.takeIf { it.isNotEmpty() }?.let { recents ->
                 item(span = full, key = "recents") {
                     Column {
                         RowTitle("Recents", null)
@@ -224,12 +292,14 @@ fun PlaylistsScreen(
             }
 
             home?.sections?.forEachIndexed { si, s ->
+            // Music hides shelves that are all podcasts, or are about them.
+            if (filter == ShelfFilter.Music && (s.items.none(keep) || PODCASTY.containsMatchIn(s.title))) return@forEachIndexed
                 item(span = full, key = "shelf-$si") {
                     Column {
                         RowTitle(s.title, null)
                         LazyRow(Modifier.bleed(EDGE), contentPadding = PaddingValues(horizontal = EDGE),
                             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            itemsIndexed(s.items, key = { i, _ -> "shelf-$si-$i" }) { _, item ->
+                            itemsIndexed(s.items.filter(keep), key = { i, _ -> "shelf-$si-$i" }) { _, item ->
                                 SpotifyTile(item, vm.spotifyHome, 148.dp, onOpen = { open(item) }, onPlay = { play(item) }, onHold = { itemSheet = item })
                             }
                         }
@@ -284,6 +354,64 @@ fun PlaylistsScreen(
                 else -> items(mine, key = { it.key }) { s -> tile(s) }
             }
         }
+    }
+}
+
+/** The pills at the top of the Playlists tab. */
+enum class ShelfFilter(val label: String) { All("All"), Music("Music"), Podcasts("Podcasts") }
+
+private val PODCASTY = Regex("podcast|episode|\\bshows?\\b", RegexOption.IGNORE_CASE)
+
+private fun ListItem.isPodcast(): Boolean =
+    uri.orEmpty().let { it.startsWith("spotify:show:") || it.startsWith("spotify:episode:") }
+
+/** Shows and episodes anywhere on your Spotify home, for the Podcasts pill. */
+private fun podcastItems(home: SpotifyHomeFeed?): List<ListItem> {
+    if (home == null) return emptyList()
+    return (home.recents.orEmpty() + home.made.orEmpty() + home.sections.orEmpty().flatMap { it.items })
+        .filter { it.isPodcast() }.distinctBy { it.uri }.take(20)
+}
+
+/** One of the newest episodes: cover, name, show and how long is left. */
+@Composable
+private fun NewEpisodeRow(e: PodcastEpisode, playing: Boolean, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().height(64.dp).pressable(onClick = onClick), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).background(Fidelis.glass)) {
+            e.imageUrl?.let { AsyncImage(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(e.name, color = if (playing) Fidelis.violet else Fidelis.ink, style = MaterialTheme.typography.titleSmall,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            val left = when {
+                e.finished -> "Played"
+                e.playedMs > 0 -> "${((e.durationMs - e.playedMs) / 60_000L).coerceAtLeast(1)} min left"
+                else -> "${(e.durationMs / 60_000L).coerceAtLeast(1)} min"
+            }
+            Text("${e.show} \u00B7 $left", color = Fidelis.inkMute, style = MaterialTheme.typography.bodySmall,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** A show you follow: cover, name and who makes it. */
+@Composable
+private fun FollowedShowTile(s: PodcastShow, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(Modifier.pressable(onClick = onClick)) {
+        Box(
+            Modifier.fillMaxWidth().aspectRatio(1f).shadow(10.dp, shape).clip(shape).background(Fidelis.glass),
+            contentAlignment = Alignment.Center,
+        ) {
+            val img = s.imageUrl
+            if (img != null) AsyncImage(img, s.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            else Icon(Icons.Rounded.Podcasts, null, tint = Fidelis.inkFaint, modifier = Modifier.size(28.dp))
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(s.name, color = Fidelis.ink, style = MaterialTheme.typography.labelLarge,
+            maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (s.publisher.isNotBlank()) Text(s.publisher, color = Fidelis.inkMute, style = MaterialTheme.typography.labelSmall,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

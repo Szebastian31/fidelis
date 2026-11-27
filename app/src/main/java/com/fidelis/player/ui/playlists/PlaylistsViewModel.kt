@@ -14,6 +14,8 @@ import com.fidelis.player.integration.spotify.SpotifyHomeFeed
 import com.fidelis.player.integration.spotify.SpotifyRemote
 import com.fidelis.player.integration.spotify.SpotifyRepository
 import com.fidelis.player.integration.spotify.toQueue
+import com.fidelis.player.integration.spotify.PodcastEpisode
+import com.fidelis.player.integration.spotify.PodcastRepository
 import com.spotify.protocol.types.ListItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -31,7 +33,8 @@ class PlaylistsViewModel @Inject constructor(
     private val remote: SpotifyRemote,
     private val feed: HomeFeed,
     val spotifyHome: SpotifyHome,
-    private val pins: PlaylistPins,
+        private val pins: PlaylistPins,
+    private val podcasts: PodcastRepository,
 ) : ViewModel() {
     val connected = repo.connected
     val nowPlaying = remote.state
@@ -48,6 +51,28 @@ class PlaylistsViewModel @Inject constructor(
     var home by mutableStateOf<SpotifyHomeFeed?>(null); private set
     private var homeJob: Job? = null
 
+    /** The Podcasts pill: the shows you follow and their newest episodes. Loaded the first time it's opened. */
+    var shows by mutableStateOf(podcasts.cachedShows()); private set
+    var newEpisodes by mutableStateOf<List<PodcastEpisode>>(emptyList()); private set
+    var loadingShows by mutableStateOf(false); private set
+    private var showsJob: Job? = null
+
+    fun loadShows(force: Boolean = false) {
+        if (showsJob?.isActive == true || (!force && newEpisodes.isNotEmpty())) return
+        showsJob = viewModelScope.launch {
+            loadingShows = true
+            val s = runCatching { podcasts.shows() }.getOrDefault(shows)
+            shows = s
+            newEpisodes = runCatching { podcasts.newEpisodes(s) }.getOrDefault(newEpisodes)
+            loadingShows = false
+        }
+    }
+
+    fun playEpisode(index: Int) {
+        val list = newEpisodes
+        if (index in list.indices) remote.playQueue(list.map { it.toQueue() }, index)
+    }
+
     init {
         // These come through the Spotify app, so load them once it's connected.
         viewModelScope.launch { remote.connected.filter { it }.collect { loadHome() } }
@@ -60,6 +85,7 @@ class PlaylistsViewModel @Inject constructor(
 
     fun refresh() {
         loadHome()
+        if (showsJob != null) loadShows(force = true)
         if (loading) return
         viewModelScope.launch {
             loading = true

@@ -5,6 +5,11 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 2.4.0
+
+- **All, Music and Podcasts pills** on the Playlists tab, like Spotify's home. Music hides podcasts from your mixes, recents and shelves. Podcasts shows new episodes from the shows you follow, podcasts from your Spotify home, and all your shows.
+- Podcast tiles on the Playlists tab open Fidelis's own show page.
+
 ## 2.3.3
 
 - **Headphone skip plays the right song.** Spotify now holds your next song from the moment each one starts, so the skip button on your headphones goes straight to it, even when you press it quickly several times. It no longer restarts the same song.
