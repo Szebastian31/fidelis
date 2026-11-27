@@ -5,6 +5,10 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 3.0.1
+
+- **Fixed Fidelis closing as soon as it opened** in 3.0.0. The release build trimmed away code the first screen needs; it now keeps all of it, and stays a fast release build.
+
 ## 3.0.0
 
 - **A real release build.** Fidelis is now built the way apps from a store are: optimised and trimmed, without the debugging extras. Scrolling, animations and starting up are smoother, and the app is smaller. It installs over the version you have, and your sign-ins, mixes and Spotify setup stay.
