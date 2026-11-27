@@ -5,6 +5,10 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 2.8.0
+
+- **Crash report** in Profile, under Diagnostics. If Fidelis closes unexpectedly, the details stay on the phone, ready to copy. No cable or terminal needed.
+
 ## 2.7.2
 
 - **Quick skips with headphones** no longer replay the same song. Pressing next again within a few seconds now moves on to the following song.

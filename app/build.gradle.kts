@@ -25,8 +25,8 @@ android {
         applicationId = "com.fidelis.player"
         minSdk = 26
         targetSdk = 36
-        versionCode = 25
-        versionName = "2.7.2"
+        versionCode = 26
+        versionName = "2.8.0"
 
         buildConfigField("String", "SPOTIFY_CLIENT_ID", secret("SPOTIFY_CLIENT_ID"))
         buildConfigField("String", "LASTFM_API_KEY", secret("LASTFM_API_KEY"))

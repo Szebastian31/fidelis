@@ -43,6 +43,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.fidelis.player.BuildConfig
+import com.fidelis.player.util.CrashLog
+import androidx.compose.ui.text.font.FontFamily
 import com.fidelis.player.MainActivity
 import com.fidelis.player.integration.spotify.SpotifyKey
 import com.fidelis.player.ui.theme.*
@@ -165,6 +167,7 @@ fun ProfileScreen(current: Skin, onSkinChange: (Skin) -> Unit, vm: ProfileViewMo
                 }
             }
 
+            CrashCard()
             Text("Fidelis ${BuildConfig.VERSION_NAME}", color = Fidelis.inkFaint,
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.fillMaxWidth().padding(top = 28.dp).wrapContentWidth(Alignment.CenterHorizontally))
@@ -341,5 +344,45 @@ private fun Field(
             keyboardActions = KeyboardActions(onDone = { onDone() }),
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+/** The last time Fidelis crashed, kept on the phone so it can be copied here instead of fished out with adb. */
+@Composable
+private fun CrashCard() {
+    val context = LocalContext.current
+    var crash by remember { mutableStateOf(CrashLog.read(context)) }
+    var details by rememberSaveable { mutableStateOf(false) }
+    SectionLabel("Diagnostics")
+    GlassCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(vertical = 6.dp)) {
+            val c = crash
+            StatusRow(
+                "Crash report",
+                if (c == null) "No crashes recorded" else "${c.time} · ${c.version}",
+                c == null,
+            ) {
+                if (c != null) FidelisChip("Copy", false, {
+                    context.getSystemService(ClipboardManager::class.java)
+                        ?.setPrimaryClip(ClipData.newPlainText("Fidelis crash", c.text))
+                    // Android 13 and later show their own "Copied" bubble.
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                })
+            }
+            if (c != null) {
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(c.headline, color = Fidelis.inkSoft, style = MaterialTheme.typography.bodySmall, maxLines = 3)
+                    if (details) Text(
+                        c.text.lines().take(40).joinToString("\n"), color = Fidelis.inkMute,
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FidelisChip(if (details) "Hide details" else "Details", details, { details = !details })
+                        FidelisChip("Clear", false, { CrashLog.clear(context); crash = null; details = false })
+                    }
+                }
+            }
+        }
     }
 }
