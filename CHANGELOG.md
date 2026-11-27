@@ -5,6 +5,22 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 3.0.0
+
+- **A real release build.** Fidelis is now built the way apps from a store are: optimised and trimmed, without the debugging extras. Scrolling, animations and starting up are smoother, and the app is smaller. It installs over the version you have, and your sign-ins, mixes and Spotify setup stay.
+
+**Everything new since 2.3**
+
+- **The player grows out of the mini player.** Pull the mini player up and the full player rises under your finger. Let go or flick and it springs open. Pull it down or swipe back and it sinks into the mini player again.
+- **Springy, fluid controls.** Buttons, pills and tiles dip when pressed and bounce back, round controls give a light vibration tick, and the back swipe previews where it goes on Android 14 and newer.
+- **Headphone skips land on the right song**, even when you press next quickly several times. Previous on headphones restarts the song, like in Spotify.
+- **10-band equaliser after a crash.** It no longer gets stuck in 5-band mode.
+- **All, Music and Podcasts pills** on the Playlists tab, with new episodes from your shows. Podcast tiles open Fidelis's own show page.
+- **Podcasts for you opens instantly** and updates in the background, with clearer groups: your taste first, then the charts.
+- **A faster Listen screen and smoother lists.** Each row appears as soon as it's ready, and covers load at the size they're shown.
+- **Vinyl for songs without a cover**, everywhere: the player, every song list and the mini player.
+- **Crash report** in Profile, under Diagnostics, ready to copy if Fidelis ever closes unexpectedly.
+
 ## 2.8.0
 
 - **Crash report** in Profile, under Diagnostics. If Fidelis closes unexpectedly, the details stay on the phone, ready to copy. No cable or terminal needed.

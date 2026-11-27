@@ -80,7 +80,7 @@ _Fidelis is Latin for faithful. Its root, fidēs, was also the Roman word for th
 <details>
 <summary>For developers</summary>
 
-A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines, Coil, OkHttp). It plays through the Spotify app with the Spotify App Remote SDK and reads your library through the Spotify Web API (PKCE sign-in). GitHub Actions builds a debug APK on every push to `main` and publishes each version as a release, with its notes from `CHANGELOG.md`.
+A native Android app in Kotlin and Jetpack Compose (Material 3, Hilt, coroutines, Coil, OkHttp). It plays through the Spotify app with the Spotify App Remote SDK and reads your library through the Spotify Web API (PKCE sign-in). GitHub Actions builds a release APK (optimised by R8, signed with the family key) on every push to `main` and publishes each version as a release, with its notes from `CHANGELOG.md`.
 
 | Where | What it is |
 | --- | --- |

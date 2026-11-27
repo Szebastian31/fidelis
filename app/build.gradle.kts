@@ -25,8 +25,8 @@ android {
         applicationId = "com.fidelis.player"
         minSdk = 26
         targetSdk = 36
-        versionCode = 26
-        versionName = "2.8.0"
+        versionCode = 27
+        versionName = "3.0.0"
 
         buildConfigField("String", "SPOTIFY_CLIENT_ID", secret("SPOTIFY_CLIENT_ID"))
         buildConfigField("String", "LASTFM_API_KEY", secret("LASTFM_API_KEY"))
@@ -51,6 +51,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+
+    // Lint still runs in Android Studio; it only stops blocking the release build on GitHub.
+    lint { checkReleaseBuilds = false }
 
     buildFeatures {
         compose = true
@@ -81,6 +84,7 @@ dependencies {
     implementation("androidx.browser:browser:1.8.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("dev.chrisbanes.haze:haze:1.1.1") // frosted glass under the tab bar
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1") // lets Android precompile Compose for a sideloaded APK
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)

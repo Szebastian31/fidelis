@@ -32,10 +32,10 @@ jobs:
           echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> local.properties
           echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
 
-      - name: Build debug APK
+      - name: Build release APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleRelease --stacktrace
 
       # One release per versionName in app/build.gradle.kts, like the rest of the family, with that version's
       # CHANGELOG.md section as its notes. Pushing again without a new version just replaces that release's APK.
@@ -47,7 +47,7 @@ jobs:
           VERSION=$(grep -m1 versionName app/build.gradle.kts | cut -d\" -f2)
           [ -n "$VERSION" ] || { echo "No versionName in app/build.gradle.kts"; exit 1; }
           APK="Fidelis_v${VERSION}.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+          cp app/build/outputs/apk/release/app-release.apk "$APK"
           if gh release view "v${VERSION}" >/dev/null 2>&1; then
             gh release upload "v${VERSION}" "$APK" --clobber
           else
