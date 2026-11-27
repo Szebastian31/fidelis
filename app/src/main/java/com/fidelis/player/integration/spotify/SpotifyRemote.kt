@@ -127,9 +127,10 @@ class SpotifyRemote @Inject constructor() {
             durationMs = t?.duration ?: 0L, imageUri = t?.imageUri?.raw, uri = t?.uri,
         )
         // Headphone "next" goes to Spotify, which only knows this one song and restarts it. Treat that as next.
+        // Quick presses count too (after 1.5s of play), even while the following song is on its way to Spotify.
         val was = _state.value
         if (was != null && !was.isPaused && was.uri != null && was.uri == snap.uri && _queue.value.isNotEmpty() &&
-            expecting == null && queuedNext == null && stale.isEmpty() && snap.positionMs < 1_500 && was.livePosition() > 4_000 &&
+            expecting == null && stale.isEmpty() && snap.positionMs < 1_000 && was.livePosition() > 1_500 &&
             was.livePosition() < was.durationMs - 4_000 && SystemClock.elapsedRealtime() - lastSeekAt > 3_000
         ) { _state.value = snap; skipNext(); return }
         _state.value = snap

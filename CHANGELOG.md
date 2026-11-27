@@ -5,6 +5,10 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 2.7.2
+
+- **Quick skips with headphones** no longer replay the same song. Pressing next again within a few seconds now moves on to the following song.
+
 ## 2.7.1
 
 - **Fixed a crash** when starting a song or opening the player. The player's opening spring overshoots a touch, which briefly gave its corners a negative size.
