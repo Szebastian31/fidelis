@@ -129,7 +129,7 @@ class SpotifyRemote @Inject constructor() {
         // Headphone "next" goes to Spotify, which only knows this one song and restarts it. Treat that as next.
         val was = _state.value
         if (was != null && !was.isPaused && was.uri != null && was.uri == snap.uri && _queue.value.isNotEmpty() &&
-            expecting == null && snap.positionMs < 1_500 && was.livePosition() > 4_000 &&
+            expecting == null && queuedNext == null && stale.isEmpty() && snap.positionMs < 1_500 && was.livePosition() > 4_000 &&
             was.livePosition() < was.durationMs - 4_000 && SystemClock.elapsedRealtime() - lastSeekAt > 3_000
         ) { _state.value = snap; skipNext(); return }
         _state.value = snap
@@ -146,6 +146,8 @@ class SpotifyRemote @Inject constructor() {
         }
         if (t?.uri != null && t.uri != likedUri) refreshLiked(t.uri, remote)
         if (snap.uri != null) reconcile(snap)
+        // Spotify holds the next song from the start, so the headphones' next button plays the right one.
+        maybeHandOverNext()
     }
 
     private fun refreshLiked(uri: String, remote: SpotifyAppRemote) {
@@ -193,11 +195,20 @@ class SpotifyRemote @Inject constructor() {
                 val up = _queue.value
                 if (up.firstOrNull()?.track?.uri == handed.uri) _queue.value = up.drop(1)
             }
-            // A leftover from an older queue: jump to what should really be next.
-            s.uri != null && stale.remove(s.uri) && _queue.value.isNotEmpty() -> {
+            // A leftover from an older queue, still in Spotify's: put things right.
+            s.uri != null && stale.remove(s.uri) -> {
                 val up = _queue.value
-                _queue.value = up.drop(1)
-                goTo(up.first().track)
+                when {
+                    // It's what comes next anyway: carry on.
+                    up.firstOrNull()?.track?.uri == s.uri -> {
+                        pushHistory(cur)
+                        _current.value = up.first().track
+                        _queue.value = up.drop(1)
+                    }
+                    up.isNotEmpty() -> { _queue.value = up.drop(1); goTo(up.first().track) }
+                    // Nothing of ours is next (a Spotify playlist is running, say): skip past it.
+                    else -> appRemote?.playerApi?.skipNext()
+                }
             }
             // Changed from outside Fidelis (Spotify app, headphones…). Follow along.
             else -> {
@@ -217,12 +228,13 @@ class SpotifyRemote @Inject constructor() {
     /** Gives Spotify the next song shortly before the current one ends. */
     private fun maybeHandOverNext() {
         val s = _state.value ?: return
-        if (s.isPaused || queuedNext != null || expecting != null || s.durationMs <= 0) return
+        if (queuedNext != null || expecting != null || s.durationMs <= 0) return
         val next = _queue.value.firstOrNull()?.track ?: return
         val cur = _current.value ?: return
         if (!s.matches(cur)) return
         val pos = s.positionMs + (SystemClock.elapsedRealtime() - lastStateAt)
-        if (s.durationMs - pos > HANDOVER_MS) return
+        // A leftover still sits in Spotify's queue: wait until it has played, so the order stays right.
+        if (stale.isNotEmpty() || pos < 0) return
         queuedNext = next
         appRemote?.playerApi?.queue(next.uri)
     }
@@ -251,11 +263,17 @@ class SpotifyRemote @Inject constructor() {
 
     private fun goTo(t: QueueTrack, rememberCurrent: Boolean = true) {
         if (rememberCurrent) pushHistory(_current.value)
-        invalidateHandOver()
         _current.value = t
         expecting = t; expectingSince = SystemClock.elapsedRealtime()
         _contextMode.value = false
-        appRemote?.playerApi?.play(t.uri)
+        if (queuedNext?.uri == t.uri && stale.isEmpty()) {
+            // Spotify already holds it next: a skip plays it without leaving a copy in Spotify's queue.
+            queuedNext = null
+            appRemote?.playerApi?.skipNext()
+        } else {
+            invalidateHandOver()
+            appRemote?.playerApi?.play(t.uri)
+        }
         ensureService()
     }
 

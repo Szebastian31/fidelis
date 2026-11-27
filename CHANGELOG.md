@@ -5,6 +5,12 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 2.3.3
+
+- **Headphone skip plays the right song.** Spotify now holds your next song from the moment each one starts, so the skip button on your headphones goes straight to it, even when you press it quickly several times. It no longer restarts the same song.
+- **Previous on headphones** restarts the song, like in Spotify, instead of sometimes skipping ahead.
+- **10 bands after a crash.** The equaliser no longer gets stuck in 5-band mode after the app restarts. It tries the full 10 bands again as soon as Spotify is ready.
+
 ## 2.3.2
 
 - **Vinyl in the mini player, for real.** The swipeable mini player above the tabs now shows the vinyl for songs without a cover.

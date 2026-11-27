@@ -13,6 +13,8 @@ import androidx.annotation.RequiresApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -104,6 +106,8 @@ object SoundEngine {
     private var session = 0
     private var loaded = false
     private var dpBroken = false
+    private var dpTries = 0
+    private var retry: Job? = null
     private var dp: Any? = null // DynamicsProcessing, kept untyped for older Android
     private var eq: Equalizer? = null
     private val bandCache = HashMap<Correction, FloatArray>()
@@ -142,7 +146,9 @@ object SoundEngine {
     }
 
     private fun attach(id: Int) {
-        if (id == session && (dp != null || eq != null)) return
+        if (id == session && dp != null) return
+        // A new Spotify session always gets another go at the full 10 bands.
+        retry?.cancel(); dpTries = 0; dpBroken = false
         release()
         session = id
         app?.let { prefs().edit().putInt(KEY_SESSION, id).apply() }
@@ -209,9 +215,15 @@ object SoundEngine {
         }
         if (session == 0) { _status.value = "Waiting for Spotify · play a song to start"; return }
         if (Build.VERSION.SDK_INT >= 28 && !dpBroken) {
-            if (runCatching { applyDp(s) }.isSuccess) return
+            if (runCatching { applyDp(s) }.isSuccess) { dpTries = 0; return }
             dpBroken = true
             release()
+            // Usually Spotify's session just isn't ready (right after a crash, say). Try 10 bands again soon.
+            if (dpTries < 3) {
+                val wait = 2_000L * (1 shl dpTries++)
+                retry?.cancel()
+                retry = scope.launch { delay(wait); if (dpBroken) { dpBroken = false; apply() } }
+            }
         }
         if (runCatching { applyEq(s) }.isFailure) {
             release()
