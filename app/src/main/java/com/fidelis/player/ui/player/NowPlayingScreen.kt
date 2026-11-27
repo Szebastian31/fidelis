@@ -173,7 +173,9 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
             override suspend fun onPreFling(available: Velocity): Velocity {
                 if (dragY <= 0f) return Velocity.Zero
                 if (dragY > closeAt || available.y > 2000f) close()
-                else animate(dragY, 0f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { v, _ -> dragY = v }
+                // Let go early and it springs back at the speed of the swipe.
+                else animate(dragY, 0f, initialVelocity = available.y,
+                    animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)) { v, _ -> dragY = v.coerceAtLeast(0f) }
                 return available
             }
         }
@@ -192,6 +194,9 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
                 .graphicsLayer {
                     translationY = dragY
                     alpha = 1f - (dragY / size.height).coerceIn(0f, 1f) * 0.4f
+                    // Pulled down, the player shrinks a little, like a card going back into the mini player.
+                    val down = (dragY / size.height).coerceIn(0f, 1f)
+                    scaleX = 1f - 0.08f * down; scaleY = scaleX
                     clip = dragY > 0f
                     shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
                 }

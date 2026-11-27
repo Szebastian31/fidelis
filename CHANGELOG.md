@@ -5,6 +5,13 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 2.5.0
+
+- **Drag the mini player up** into the full player. It follows your finger and opens on a soft spring; a flick works too.
+- **Dragging the player down** shrinks it a little as it goes, and it springs back at your speed if you let go early.
+- **Bounce on controls.** Buttons, pills and tiles dip when pressed and bounce back, even on a quick tap. Round controls give a light vibration tick.
+- **Back gesture with a preview** on Android 14 and newer. Pages, the player and bottom sheets follow your back swipe, and you can cancel halfway.
+
 ## 2.4.0
 
 - **All, Music and Podcasts pills** on the Playlists tab, like Spotify's home. Music hides podcasts from your mixes, recents and shelves. Podcasts shows new episodes from the shows you follow, podcasts from your Spotify home, and all your shows.

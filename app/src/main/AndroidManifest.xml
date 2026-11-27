@@ -32,6 +32,7 @@
         android:label="Fidelis"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.Fidelis">
         <activity
             android:name=".MainActivity"

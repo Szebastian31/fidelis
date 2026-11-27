@@ -9,6 +9,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -66,6 +68,10 @@ fun SwipeMini(
     val swipeAt = with(LocalDensity.current) { 72.dp.toPx() }
     val next by rememberUpdatedState(onNext)
     val prev by rememberUpdatedState(onPrev)
+    val open by rememberUpdatedState(onOpen)
+    // Pull up into the player: it follows the finger, and past this (or with a flick) the player opens.
+    val lift = remember { Animatable(0f) }
+    val openAt = with(LocalDensity.current) { 56.dp.toPx() }
     var position by remember(snap) { mutableLongStateOf(snap.livePosition()) }
     LaunchedEffect(snap) { while (!snap.isPaused) { delay(500); position = snap.livePosition() } }
     val progress = if (snap.durationMs > 0) (position.toFloat() / snap.durationMs).coerceIn(0f, 1f) else 0f
@@ -91,8 +97,37 @@ fun SwipeMini(
                     onDragCancel = { scope.launch { offset.animateTo(0f) } },
                 ) { change, dx -> change.consume(); scope.launch { offset.snapTo(offset.value + dx) } }
             }
+            .pointerInput(Unit) {
+                val tracker = VelocityTracker()
+                detectVerticalDragGestures(
+                    onDragStart = { tracker.resetTracking() },
+                    onDragEnd = {
+                        val v = tracker.calculateVelocity().y
+                        scope.launch {
+                            if (-lift.value > openAt || v < -1200f) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                open()
+                                lift.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow))
+                            } else {
+                                lift.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow), initialVelocity = v)
+                            }
+                        }
+                    },
+                    onDragCancel = { scope.launch { lift.animateTo(0f, spring(dampingRatio = 0.5f)) } },
+                ) { change, dy ->
+                    change.consume()
+                    tracker.addPosition(change.uptimeMillis, change.position)
+                    // Up follows the finger; down only gives a little and springs back.
+                    val next = lift.value + if (lift.value + dy > 0f) dy * 0.25f else dy
+                    scope.launch { lift.snapTo(next) }
+                }
+            }
             .graphicsLayer {
                 translationX = offset.value
+                // Pulled up, it lifts and grows a touch on its way into the player.
+                translationY = lift.value
+                val up = (-lift.value / (openAt * 2f)).coerceIn(0f, 1f)
+                scaleX = 1f + 0.04f * up; scaleY = scaleX
                 alpha = 1f - (abs(offset.value) / size.width.coerceAtLeast(1f)).coerceIn(0f, 0.6f)
             }
             .pressable(onClick = onOpen)

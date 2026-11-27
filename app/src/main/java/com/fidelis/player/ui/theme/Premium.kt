@@ -9,6 +9,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -202,14 +206,30 @@ fun artTint(bmp: Bitmap): Color? = runCatching {
 @Composable
 fun rememberArtTint(art: Bitmap?): Color? = remember(art) { art?.let { artTint(it) } }
 
-/** Gentle scale-down on press instead of a ripple. Used by every tappable surface. */
+/** Dips on press and bounces back on release, instead of a ripple. Used by every tappable surface. */
 fun Modifier.pressable(enabled: Boolean = true, onClick: () -> Unit): Modifier = composed {
     val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        if (pressed) 0.96f else 1f, spring(stiffness = Spring.StiffnessMediumLow), label = "press",
-    )
-    graphicsLayer { scaleX = scale; scaleY = scale }
+    // 0 at rest, 1 fully pressed. Letting go springs past rest, so it overshoots a touch.
+    val press = remember { Animatable(0f) }
+    LaunchedEffect(source) {
+        source.interactions.collectLatest { i ->
+            when (i) {
+                is PressInteraction.Press -> press.animateTo(1f, spring(stiffness = Spring.StiffnessHigh))
+                is PressInteraction.Release -> {
+                    // A quick tap still dips before it springs back.
+                    if (press.value < 0.6f) press.animateTo(1f, tween(70))
+                    press.animateTo(0f, spring(dampingRatio = 0.38f, stiffness = 600f))
+                }
+                is PressInteraction.Cancel -> press.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 600f))
+            }
+        }
+    }
+    graphicsLayer {
+        // Small buttons dip more than full-width rows.
+        val depth = (10.dp.toPx() / size.width.coerceAtLeast(1f)).coerceIn(0.025f, 0.08f)
+        val s = 1f - depth * press.value
+        scaleX = s; scaleY = s
+    }
         .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick)
 }
 
@@ -291,7 +311,9 @@ fun IconCircle(
     val glow = if (filled) Modifier.shadow(12.dp, CircleShape, ambientColor = Fidelis.purple, spotColor = Fidelis.purple) else Modifier
     val bg = if (filled) Modifier.background(Fidelis.accent).background(Fidelis.sheen)
     else Modifier.background(Fidelis.glassStrong).background(Fidelis.sheen).border(1.dp, Fidelis.border, CircleShape)
-    Box(Modifier.pressable(onClick = onClick).size(size).then(glow).clip(CircleShape).then(bg), contentAlignment = Alignment.Center) {
+    // Round controls give a light tick under the finger.
+    val haptic = LocalHapticFeedback.current
+    Box(Modifier.pressable(onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onClick() }).size(size).then(glow).clip(CircleShape).then(bg), contentAlignment = Alignment.Center) {
         Icon(icon, contentDescription, tint = Fidelis.ink, modifier = Modifier.size(size * 0.5f))
     }
 }
