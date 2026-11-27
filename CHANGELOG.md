@@ -5,6 +5,10 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 2.7.1
+
+- **Fixed a crash** when starting a song or opening the player. The player's opening spring overshoots a touch, which briefly gave its corners a negative size.
+
 ## 2.7.0
 
 - **The player grows out of the mini player.** Pull the mini player up and the full player rises out of it under your finger, from a rounded card to full screen. Let go past a quarter, or flick, and it springs open; let go early and it sinks back. Tapping the mini player plays the same animation.

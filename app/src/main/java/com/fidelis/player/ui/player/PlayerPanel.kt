@@ -110,7 +110,8 @@ fun PlayerOverlay(nav: NavController) {
             }
             Box(
                 Modifier.fillMaxSize().graphicsLayer {
-                    val q = PlayerPanel.progress.value
+                    // The spring overshoots a touch when it opens; keep everything drawn within closed and open.
+                    val q = PlayerPanel.progress.value.coerceIn(0f, 1f)
                     val pulled = (PlayerPanel.pull / size.height).coerceIn(0f, 1f)
                     translationY = (1f - q) * PlayerPanel.travel + PlayerPanel.pull
                     // Starts as wide as the mini player and fills the screen as it rises.
@@ -119,7 +120,7 @@ fun PlayerOverlay(nav: NavController) {
                     scaleX = s; scaleY = s
                     transformOrigin = TransformOrigin(0.5f, 0f)
                     alpha = (q * 3f).coerceIn(0f, 1f) * (1f - 0.4f * pulled)
-                    shape = RoundedCornerShape(20.dp.toPx() * (1f - q) + 28.dp.toPx() * pulled)
+                    shape = RoundedCornerShape((20.dp.toPx() * (1f - q) + 28.dp.toPx() * pulled).coerceAtLeast(0f))
                     clip = true
                 },
             ) {
