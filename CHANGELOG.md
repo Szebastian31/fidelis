@@ -5,6 +5,12 @@ What changed in each version of Fidelis, newest first.
 
 
 
+## 2.7.0
+
+- **The player grows out of the mini player.** Pull the mini player up and the full player rises out of it under your finger, from a rounded card to full screen. Let go past a quarter, or flick, and it springs open; let go early and it sinks back. Tapping the mini player plays the same animation.
+- **And shrinks back into it.** Pulling the player down or swiping back carries it smoothly into the mini player, and you can cancel a back swipe halfway.
+- The tab you were on stays put under the player, so closing it is instant and keeps your place.
+
 ## 2.6.0
 
 - **Podcasts for you opens instantly.** Your shows, new episodes and suggestions are kept on the phone and show straight away, then update in the background. Episodes and suggestions load side by side, and charts are kept for a few hours.

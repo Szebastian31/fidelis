@@ -2,6 +2,8 @@ package com.fidelis.player.ui.player
 
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -153,6 +155,10 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
     val currentOnBack by rememberUpdatedState(onBack)
     val closeAt = with(density) { 140.dp.toPx() }
     val close = { if (!closing) { closing = true; currentOnBack() } }
+    // The panel around the player follows the pull; opening it again starts afresh.
+    LaunchedEffect(Unit) { snapshotFlow { dragY }.collect { if (!closing) PlayerPanel.pull = it } }
+    LaunchedEffect(PlayerPanel.open) { if (PlayerPanel.open) { closing = false; dragY = 0f } }
+    DisposableEffect(Unit) { onDispose { PlayerPanel.pull = 0f } }
     val sheet = remember(closeAt) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -192,11 +198,7 @@ fun NowPlayingScreen(onBack: () -> Unit, vm: NowPlayingViewModel = hiltViewModel
         Box(
             Modifier.fillMaxSize()
                 .graphicsLayer {
-                    translationY = dragY
-                    alpha = 1f - (dragY / size.height).coerceIn(0f, 1f) * 0.4f
-                    // Pulled down, the player shrinks a little, like a card going back into the mini player.
-                    val down = (dragY / size.height).coerceIn(0f, 1f)
-                    scaleX = 1f - 0.08f * down; scaleY = scaleX
+                    // The panel around the player moves, fades and shrinks it as it's pulled (see PlayerPanel).
                     clip = dragY > 0f
                     shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
                 }

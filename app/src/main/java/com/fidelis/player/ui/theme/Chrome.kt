@@ -11,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import com.fidelis.player.ui.player.PlayerPanel
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -103,23 +104,26 @@ fun SwipeMini(
                     onDragStart = { tracker.resetTracking() },
                     onDragEnd = {
                         val v = tracker.calculateVelocity().y
-                        scope.launch {
-                            if (-lift.value > openAt || v < -1200f) {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                open()
-                                lift.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow))
-                            } else {
-                                lift.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow), initialVelocity = v)
-                            }
+                        scope.launch { lift.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow)) }
+                        if (PlayerPanel.progress.value > 0f && PlayerPanel.settle(-v / PlayerPanel.travel)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         }
                     },
-                    onDragCancel = { scope.launch { lift.animateTo(0f, spring(dampingRatio = 0.5f)) } },
+                    onDragCancel = {
+                        scope.launch { lift.animateTo(0f, spring(dampingRatio = 0.5f)) }
+                        if (PlayerPanel.progress.value > 0f) PlayerPanel.settle(0f)
+                    },
                 ) { change, dy ->
                     change.consume()
                     tracker.addPosition(change.uptimeMillis, change.position)
-                    // Up follows the finger; down only gives a little and springs back.
-                    val next = lift.value + if (lift.value + dy > 0f) dy * 0.25f else dy
-                    scope.launch { lift.snapTo(next) }
+                    val p = PlayerPanel.progress.value
+                    if (lift.value <= 0f && (p > 0f || dy < 0f)) {
+                        // Up: the player itself grows out of the mini player under the finger.
+                        PlayerPanel.dragTo(p - dy / PlayerPanel.travel)
+                    } else {
+                        // Down only gives a little and springs back.
+                        scope.launch { lift.snapTo((lift.value + dy * 0.25f).coerceAtLeast(0f)) }
+                    }
                 }
             }
             .graphicsLayer {

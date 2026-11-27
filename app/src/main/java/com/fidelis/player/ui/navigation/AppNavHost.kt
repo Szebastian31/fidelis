@@ -60,6 +60,8 @@ import com.fidelis.player.ui.catalog.ArtistScreen
 import com.fidelis.player.ui.mood.MixDetailScreen
 import com.fidelis.player.ui.mood.MoodScreen
 import com.fidelis.player.ui.player.NowPlayingScreen
+import com.fidelis.player.ui.player.PlayerOverlay
+import com.fidelis.player.ui.player.PlayerPanel
 import com.fidelis.player.ui.playlists.PlaylistDetailScreen
 import com.fidelis.player.ui.playlists.PlaylistsScreen
 import com.fidelis.player.ui.profile.ProfileScreen
@@ -116,7 +118,7 @@ fun AppNavHost(
     val haze = remember { HazeState() }
     val entry by nav.currentBackStackEntryAsState()
     val onPlayer = entry?.destination?.route == PLAYER
-    val openPlayer = { nav.navigate(PLAYER) { launchSingleTop = true } }
+    val openPlayer: () -> Unit = { PlayerPanel.expand() }
     val openArtist = { id: String -> nav.navigate("artist/$id") }
     val openAlbum = { id: String -> nav.navigate("album/$id") }
     // Tapping the tab you're on goes back to its start: pages close and the list returns to the top.
@@ -180,7 +182,8 @@ fun AppNavHost(
                 exitTransition = { fadeOut(tween(180)) },
                 popExitTransition = { slideOutVertically(tween(320, easing = FastOutSlowInEasing)) { it } },
             ) {
-                NowPlayingScreen(onBack = { nav.popBackStack() })
+                // The player is a panel over the app now; anything still sent here just opens it.
+            LaunchedEffect(Unit) { nav.popBackStack(); PlayerPanel.expand() }
             }
         }
         // Frosted band behind the clock; content scrolls under it.
@@ -188,6 +191,7 @@ fun AppNavHost(
             TopGlass(haze)
         }
         AppChrome(nav, remote, haze, Modifier.align(Alignment.BottomCenter), onReselect = reselect)
+        PlayerOverlay(nav)
     }
 }
 
@@ -243,7 +247,7 @@ fun AppChrome(nav: NavHostController, remote: SpotifyRemote, haze: HazeState, mo
                 snap?.let { s ->
                     SwipeMini(
                         s, art,
-                        onOpen = { nav.navigate(PLAYER) { launchSingleTop = true } },
+                        onOpen = { PlayerPanel.expand() },
                         onToggle = { if (s.isPaused) remote.resume() else remote.pause() },
                         onNext = { remote.skipNext() },
                         onPrev = { remote.skipPrevious() },
